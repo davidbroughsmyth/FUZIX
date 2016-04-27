@@ -70,6 +70,6 @@
 #define NMOUNTS	 2	  /* Number of mounts at a time */
 #define swap_map(x)	((uint8_t *)(x))
 
-/* Remember to update platform-dragon-nx32/kernel.defs to match */
+/* Remember to update platform-dragon-nx32/kernel.def to match */
 
 extern void platform_discard(void);
