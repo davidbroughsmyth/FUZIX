@@ -1,0 +1,200 @@
+Fuzix for 6809 Multicomp
+
+Copyright 2016, Neal Andrew Crook, under GPL2.
+Derived from Coco3 which is
+Copyright 2015, Brett M. Gordon, under GPL2.
+
+This port is for running FUZIX on an FPGA computer called "Multicomp"
+which was originally designed by Grant Searle. This incarnation of
+Multicomp uses a 6809 processor, thus the platform name "multicomp09".
+
+In its current form, somwhat evolved from Grant's design, multicomp09
+provides the following:
+
+- boot from ROM but ROM can then be switched out of the memory map
+- ROM is CamelForth, with hooks to boot multiple other OS from SD:
+  - Microsoft BASIC, FLEX, CUBIX, Buggy, NitrOS9, FUZIX
+- RAM from 0 to 0xffff except for:
+  - I/O space from 0xffd0-ffdf
+- 50Hz Timer interrupt
+- Hardware single-step
+- SD controller in hw state-machines
+- Virtual 6850-like UART interfacing to an 80x25 ANSI terminal on a VGA
+  display with PS/2 keyboard input
+- Upto 2 6850-like serial UARTs with RS232 or virtual-RS232/USB interfaces
+- coco-style memory mapping unit (2 contexts, 8K banks)
+  - upto 1MByte physical RAM
+- RTC through DS1302 bit-banged on GPIO port.
+- 6809 running at about 12MHz
+
+
+This port is based heavily on the coco3 port which itself is based on
+the platform-6809test and the two dragon ports by Tormod Volden.
+No disk swapping is supported
+
+*************************
+REQUIREMENTS
+*************************
+
+A 128KByte or more multicomp09 board
+
+Limited debug can be performed using exec09
+
+and for building:
+
+lwtools from William Astle: http://lwtools.projects.l-w.ca/
+gcc6809: http://toolshed.sourceforge.net/gcc/
+
+
+*************************
+BOOTING
+*************************
+
+The build process (see BUILDING below) produces the following files:
+
+fuzix.bin    -- the kernel, in DECB object file format
+fuzixfs.dsk  -- an image of the root file system in fuzix disk format.
+boot.bin     -- a bootstrap loader, in raw binary format.
+
+The kernel must be loaded and started through a platform-dependent process. When
+the kernel starts up it locates and mounts the root disk. The root disk contains
+the /dev tree as well as essential binaries like init.
+
+DECB can contain multiple sections, with different load addresses, and a start
+address. Therefore, it can represent a sparse binary.
+
+The multicomp SDcard holds multiple OS/disk images so the FUZIX stuff cannot
+start at block 0. Want space for a kernel, a swap file, a root disk and a second
+disk.
+
+The kernel      starts at block 0x3.0000 on the SDcard
+The rootfs      starts at block 0x3.1000 on the SDcard
+The boot loader starts at block 0x3.0400 on the SDcard
+Space is assigned for a 1MByte swap file at 0x3.0800
+Space is assigned for a 2nd file system  at 0x4.1000
+
+All of these values are hard-coded through defines in TODO.
+
+The image boot.bin is designed to load and start at address 0xd00. It is ~1kbyte
+in size, including data space. It locates the kernel and parses the DECB format
+to load the kernel to RAM and pass control to it at its start address.
+
+Boot from CamelForth looks like this:
+
+HEX MMUMAP
+3 SDLBA2 400 D000 SDRD
+D000 PIVOT
+
+or, one-liner:
+
+HEX MMUMAP 3 SDLBA2 400 D000 SDRD D000 PIVOT
+
+
+[NAC HACK 2016Apr23] KEYBOARD and DEVICES sections need update..
+
+*************************
+KEYBOARD
+*************************
+
+Some work needs done on the support on the ALT key shifting.  The ALT
+key is hard to use with a emulators that work in Windows or X, anyway.
+
+The tilde, "~", character can be produced with <F1>
+The pipe, "|", character can be produced with <SHIFT><F1>
+
+Pressing <CTRL><1> will switch to virtual console No. 1.
+Pressing <CTRL><2> will switch to virtual console No. 2.
+
+
+*************************
+DEVICES (so far)
+*************************
+
+node       major   minor     description
+/dev/tty1  2       1   	     console / 
+/dev/tty2  2       2         virtual terminal No. 2.
+/dev/tty3  2       3         virtual terminal No. 3.
+/dev/tty4  2       4         Drivewire Virtual Window #0
+/dev/dw?   8       0-256     Drivewire Block Drives
+
+
+**************************
+BUILDING
+**************************
+
+# 1. Build the kernel:
+make -C Kernel TARGET=multicomp09
+
+# 2. Build the bootstrap loader
+make -C Kernel/platform-multicomp09 boot.bin
+
+# 2. Build the libraries
+make -C Library tools/syscall_6809
+make -C Library/libs -f Makefile.6809 TARGET=multicomp09
+
+# 3. Build the utils
+make -C Applications/util -f Makefile.6809 TARGET=multicomp09
+make -C Applications/V7/cmd/sh -f Makefile.6809 TARGET=multicomp09
+make -C Applications/levee -f Makefile.6809 TARGET=multicomp09
+make -C Applications/cave -f Makefile.6809 TARGET=multicomp09
+make -C Applications/dw -f Makefile.6809 TARGET=multicomp09
+
+# 4. Build disk tools
+make -C Standalone
+
+# 5. Build boot disk image
+cd Standalone/filesystem-src && ./build-filesystem -X fuzixfs.dsk 256 65535
+
+
+
+*************************
+DONE
+*************************
+
+* Fix the underlying Banking layout to better handle UDATA
+
+
+*************************
+TO DO
+*************************
+
+* Swapping to disk has not been implemented yet, so a standard 512k
+upgrade is required.
+
+* IDE Drivers.
+
+* SDC Drivers.
+
+* SCSI Drivers.
+
+* Better and more DriveWire Virtual Serial Ports.
+
+* Better support of the GIME chip's video modes
+
+* A whole gaggle of things, to numerous to count.
+
+[NAC HACK 2016Apr23] my TO DO
+
+* Rework boot.s to be buffer-less
+* currently assume 64, 8K pages - like coco3. Want actually to do a memory size and cope with 512K
+  or 1MByte
+* unify things that need not be different from coco3
+* BUG fix exec09 core dump on register print
+* BUG separate memcpy memset out of videoll.s -- for all 6809 platforms.
+* BUG should have CONFIG_SDC in coco config.def otherwise devsdc_init doesn't get called in devices.c
+* BUG other platforms have mixture of CONFIG_IDE and DEVICE_IDE and CONFIG_SDC and DEVICE_SD
+* BUG coco3 devices.c should #include devide.h devsd.h
+* BUG fix problem of missing include file that I ended up copying
+* BUG devsd.h has devsd_init but devsdc.c had devsdc_init, so did devices.c The other routine names
+* are not uniform either..
+* BUG how to set CMDLINE? even if not set, cmdline gets defined.. and even though *cmdline is 0
+* --> no, that was a result of me hard-defining the boot device.
+
+*************************
+BUGS
+*************************
+
+* Things work better if you compile the userspace utilities (esp. "init")
+with standard gcc optimizations.
+
+

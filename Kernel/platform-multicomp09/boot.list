@@ -1,0 +1,225 @@
+                      (                     boot/boot.s):00001 ;;;
+                      (                     boot/boot.s):00002 ;;; A Fuzix booter for the multicomp09 SDcard controller.
+                      (                     boot/boot.s):00003 ;;;
+                      (                     boot/boot.s):00004 ;;; Neal Crook April 2016
+                      (                     boot/boot.s):00005 ;;; This code started as a frankensteinian fusion of Brett's Coco3
+                      (                     boot/boot.s):00006 ;;; booter and my FLEX bootstrap loader.
+                      (                     boot/boot.s):00007 ;;;
+                      (                     boot/boot.s):00008 ;;; This booter is <1 512-byte sectors long and can live anywhere on
+                      (                     boot/boot.s):00009 ;;; SD. It is loaded to 0xd000 and entered from there. It uses a
+                      (                     boot/boot.s):00010 ;;; 512byte disk buffer beyond its end point and a 100-byte stack
+                      (                     boot/boot.s):00011 ;;; beyond that.. so its whole footprint is <1Kbyte.
+                      (                     boot/boot.s):00012 ;;;
+                      (                     boot/boot.s):00013 ;;; Environment: at entry, the multicomp ROM is disabled and the
+                      (                     boot/boot.s):00014 ;;; MMU is enabled and is set up for a flat (1-1) mapping, with TR=0.
+                      (                     boot/boot.s):00015 ;;; Function: load and start a DECB image (the FUZIX kernel). The
+                      (                     boot/boot.s):00016 ;;; location of the image on the SDcard is hard-wired by equates
+                      (                     boot/boot.s):00017 ;;; klba2..klba0 below.
+                      (                     boot/boot.s):00018 
+                      (                     boot/boot.s):00019 ;;; [NAC HACK 2016Apr22] todo: don't actually NEED a disk buffer..
+                      (                     boot/boot.s):00020 ;;; do without it.. but then need a routine to flush the remaining
+                      (                     boot/boot.s):00021 ;;; data (if any) from the SDcard after the last sector's done
+                      (                     boot/boot.s):00022 ;;; with and before jumping into the loaded image.
+                      (                     boot/boot.s):00023 
+                      (                     boot/boot.s):00024 ;;; --------- multicomp i/o registers
+                      (                     boot/boot.s):00025 
+                      (                     boot/boot.s):00026 ;;; sdcard control registers
+     FFD8             (                     boot/boot.s):00027 sddata  equ $ffd8
+     FFD9             (                     boot/boot.s):00028 sdctl   equ $ffd9
+     FFDA             (                     boot/boot.s):00029 sdlba0  equ $ffda
+     FFDB             (                     boot/boot.s):00030 sdlba1  equ $ffdb
+     FFDC             (                     boot/boot.s):00031 sdlba2  equ $ffdc
+                      (                     boot/boot.s):00032 
+                      (                     boot/boot.s):00033 ;;; vdu/virtual UART
+     FFD1             (                     boot/boot.s):00034 uartdat equ $ffd1
+     FFD0             (                     boot/boot.s):00035 uartsta equ $ffd0
+                      (                     boot/boot.s):00036 
+     0003             (                     boot/boot.s):00037 klba2   equ $3
+     0000             (                     boot/boot.s):00038 klba1   equ $0
+     0000             (                     boot/boot.s):00039 klba0   equ $0
+                      (                     boot/boot.s):00040 
+                      (                     boot/boot.s):00041 ;;; based on the memory map, this seems a safe place to load; the
+                      (                     boot/boot.s):00042 ;;; kernel doesn't use any space here. That may change and require
+                      (                     boot/boot.s):00043 ;;; a re-evaluation.
+                      (                     boot/boot.s):00044         org     $d000
+                      (                     boot/boot.s):00045 
+                      (                     boot/boot.s):00046 ;;; entry point
+D000 10CED33C         (                     boot/boot.s):00047 start   lds     #stack
+                      (                     boot/boot.s):00048 
+D004 8646             (                     boot/boot.s):00049         lda     #'F'            ; show user that we got here
+D006 8D5D             (                     boot/boot.s):00050         bsr     tovdu
+D008 8655             (                     boot/boot.s):00051         lda     #'U'
+D00A 8D59             (                     boot/boot.s):00052         bsr     tovdu
+D00C 865A             (                     boot/boot.s):00053         lda     #'Z'
+D00E 8D55             (                     boot/boot.s):00054         bsr     tovdu
+D010 8649             (                     boot/boot.s):00055         lda     #'I'
+D012 8D51             (                     boot/boot.s):00056         bsr     tovdu
+D014 8658             (                     boot/boot.s):00057         lda     #'X'
+D016 8D4D             (                     boot/boot.s):00058         bsr     tovdu
+                      (                     boot/boot.s):00059 
+                      (                     boot/boot.s):00060 ;;; decb format:
+                      (                     boot/boot.s):00061 ;;;
+                      (                     boot/boot.s):00062 ;;; section preamble:
+                      (                     boot/boot.s):00063 ;;; offset 0 0x00
+                      (                     boot/boot.s):00064 ;;;        1 length high
+                      (                     boot/boot.s):00065 ;;;        2 length low
+                      (                     boot/boot.s):00066 ;;;        3 load address high
+                      (                     boot/boot.s):00067 ;;;        4 load address low
+                      (                     boot/boot.s):00068 ;;;
+                      (                     boot/boot.s):00069 ;;; image postamble:
+                      (                     boot/boot.s):00070 ;;; offset 0 0xff
+                      (                     boot/boot.s):00071 ;;;        1 0x00
+                      (                     boot/boot.s):00072 ;;;        2 0x00
+                      (                     boot/boot.s):00073 ;;;        3 exec high
+                      (                     boot/boot.s):00074 ;;;        4 exec low
+                      (                     boot/boot.s):00075 
+                      (                     boot/boot.s):00076 ;;; Y - preserved as pointer to disk buffer. Start at empty
+                      (                     boot/boot.s):00077 ;;; buffer to trigger a disk load.
+D018 108ED2D8         (                     boot/boot.s):00078         ldy     #sctbuf+512
+                      (                     boot/boot.s):00079 
+D01C BDD07E           (                     boot/boot.s):00080 c@      jsr     getb            ; get a byte in A from buffer
+D01F 81FF             (                     boot/boot.s):00081         cmpa    #$ff            ; postamble marker?
+D021 271B             (                     boot/boot.s):00082         beq     post            ; yes, handle it and we're done.
+                      (                     boot/boot.s):00083         ;; expect preamble
+D023 8100             (                     boot/boot.s):00084         cmpa    #0              ; preamble marker?
+D025 10260026         (                     boot/boot.s):00085         lbne    abort           ; unexpected.. bad format
+D029 BDD073           (                     boot/boot.s):00086         jsr     getw            ; D = length
+D02C 1F01             (                     boot/boot.s):00087         tfr     d,x             ; X = length
+D02E BDD073           (                     boot/boot.s):00088         jsr     getw            ; D = load address
+D031 1F03             (                     boot/boot.s):00089         tfr     d,u             ; U = load address
+                      (                     boot/boot.s):00090         ;; load section: X bytes into memory at U
+D033 BDD07E           (                     boot/boot.s):00091 d@      jsr     getb            ; A = byte
+D036 A7C0             (                     boot/boot.s):00092         sta     ,u+             ; copy to memory
+D038 301F             (                     boot/boot.s):00093         leax    -1,x            ; decrement byte count
+D03A 26F7             (                     boot/boot.s):00094         bne     d@              ; loop for next byte if any
+D03C 20DE             (                     boot/boot.s):00095         bra     c@              ; loop for next pre/post amble
+                      (                     boot/boot.s):00096         ;; postable
+D03E BDD073           (                     boot/boot.s):00097 post    jsr     getw            ; get zero's
+D041 10830000         (                     boot/boot.s):00098         cmpd    #0              ; test D.. expect 0
+D045 10260006         (                     boot/boot.s):00099         lbne    abort           ; unexpected.. bad format
+D049 BDD073           (                     boot/boot.s):00100         jsr     getw            ; get exec address
+D04C 3406             (                     boot/boot.s):00101         pshs    d               ; save on stack
+D04E 39               (                     boot/boot.s):00102         rts                     ; go and never come back
+                      (                     boot/boot.s):00103 
+                      (                     boot/boot.s):00104 
+                      (                     boot/boot.s):00105 ;;; Abort! Bad record format.
+D04F 8642             (                     boot/boot.s):00106 abort   lda     #'B'            ; show user that we got here
+D051 8D12             (                     boot/boot.s):00107         bsr     tovdu
+D053 8641             (                     boot/boot.s):00108         lda     #'A'
+D055 8D0E             (                     boot/boot.s):00109         bsr     tovdu
+D057 8644             (                     boot/boot.s):00110         lda     #'D'
+D059 8D0A             (                     boot/boot.s):00111         bsr     tovdu
+D05B 860D             (                     boot/boot.s):00112         lda     #$0d
+D05D 8D06             (                     boot/boot.s):00113         bsr     tovdu
+D05F 860A             (                     boot/boot.s):00114         lda     #$0a
+D061 8D02             (                     boot/boot.s):00115         bsr     tovdu
+D063 20FE             (                     boot/boot.s):00116 abort1  bra     abort1          ; spin forever
+                      (                     boot/boot.s):00117 
+                      (                     boot/boot.s):00118 
+                      (                     boot/boot.s):00119 ;;;
+                      (                     boot/boot.s):00120 ;;; SUBROUTINE ENTRY POINT
+                      (                     boot/boot.s):00121 ;;; send character to vdu
+                      (                     boot/boot.s):00122 ;;; a: character to print
+                      (                     boot/boot.s):00123 ;;; can destroy b,cc
+                      (                     boot/boot.s):00124 
+D065 3404             (                     boot/boot.s):00125 tovdu   pshs    b
+D067 F6FFD0           (                     boot/boot.s):00126 vdubiz  ldb     uartsta
+D06A C502             (                     boot/boot.s):00127         bitb    #2
+D06C 27F9             (                     boot/boot.s):00128         beq     vdubiz  ; busy
+                      (                     boot/boot.s):00129 
+D06E B7FFD1           (                     boot/boot.s):00130         sta     uartdat ; ready, send character
+D071 3584             (                     boot/boot.s):00131         puls    b,pc
+                      (                     boot/boot.s):00132 
+                      (                     boot/boot.s):00133 
+                      (                     boot/boot.s):00134 ;;;
+                      (                     boot/boot.s):00135 ;;; SUBROUTINE ENTRY POINT
+                      (                     boot/boot.s):00136 ;;; get next word from disk buffer - read sector/refill buffer
+                      (                     boot/boot.s):00137 ;;; if necessary
+                      (                     boot/boot.s):00138 ;;; return word in D
+                      (                     boot/boot.s):00139 ;;; must preserve Y which is a global pointing to the next char in the buffer
+                      (                     boot/boot.s):00140 
+D073 BDD07E           (                     boot/boot.s):00141 getw    jsr     getb            ; A = high byte
+D076 1F89             (                     boot/boot.s):00142         tfr     a,b             ; B = high byte
+D078 BDD07E           (                     boot/boot.s):00143         jsr     getb            ; A = low byte
+D07B 1E89             (                     boot/boot.s):00144         exg     a,b             ; flip D = next word
+D07D 39               (                     boot/boot.s):00145         rts
+                      (                     boot/boot.s):00146 
+                      (                     boot/boot.s):00147 
+                      (                     boot/boot.s):00148 ;;;
+                      (                     boot/boot.s):00149 ;;; SUBROUTINE ENTRY POINT
+                      (                     boot/boot.s):00150 ;;; get next byte from disk buffer - read sector/refill buffer
+                      (                     boot/boot.s):00151 ;;; if necessary
+                      (                     boot/boot.s):00152 ;;; return byte in A
+                      (                     boot/boot.s):00153 ;;; Destroys A, B.
+                      (                     boot/boot.s):00154 ;;; must preserve Y which is a global pointing to the next char in the buffer
+                      (                     boot/boot.s):00155 
+D07E 108CD2D8         (                     boot/boot.s):00156 getb    cmpy    #sctbuf+512     ; out of data?
+D082 260B             (                     boot/boot.s):00157         bne     getb4           ; go read byte if not
+D084 8D0C             (                     boot/boot.s):00158 getb2   bsr     read            ; read next sector, reset Y
+D086 FCD0D6           (                     boot/boot.s):00159         ldd     lba1            ; point to next linear block
+D089 C30001           (                     boot/boot.s):00160         addd    #1
+D08C FDD0D6           (                     boot/boot.s):00161         std     lba1
+D08F A6A0             (                     boot/boot.s):00162 getb4   lda     ,y+             ; get next character
+D091 39               (                     boot/boot.s):00163         rts
+                      (                     boot/boot.s):00164 
+                      (                     boot/boot.s):00165 
+                      (                     boot/boot.s):00166 ;;;
+                      (                     boot/boot.s):00167 ;;; SUBROUTINE ENTRY POINT
+                      (                     boot/boot.s):00168 ;;; read single 512-byte block from lba0, lba1, lba2 to
+                      (                     boot/boot.s):00169 ;;; buffer at sctbuf.
+                      (                     boot/boot.s):00170 ;;; return Y pointing to start of buffer.
+                      (                     boot/boot.s):00171 ;;; Destroys A, B
+                      (                     boot/boot.s):00172 ;;;
+                      (                     boot/boot.s):00173 
+D092 B6D0D7           (                     boot/boot.s):00174 read    lda     lba0            ; load block address to SDcontroller
+D095 B7FFDA           (                     boot/boot.s):00175         sta     sdlba0
+D098 B6D0D6           (                     boot/boot.s):00176         lda     lba1
+D09B B7FFDB           (                     boot/boot.s):00177         sta     sdlba1
+D09E B6D0D5           (                     boot/boot.s):00178         lda     lba2
+D0A1 B7FFDC           (                     boot/boot.s):00179         sta     sdlba2
+                      (                     boot/boot.s):00180 
+D0A4 4F               (                     boot/boot.s):00181         clra
+D0A5 B7FFD9           (                     boot/boot.s):00182         sta     sdctl           ; issue RD command to SDcontroller
+                      (                     boot/boot.s):00183 
+D0A8 108ED0D8         (                     boot/boot.s):00184         ldy     #sctbuf         ; where to put it
+                      (                     boot/boot.s):00185 
+                      (                     boot/boot.s):00186 ;;; now transfer 512 bytes, waiting for each in turn.
+                      (                     boot/boot.s):00187 
+D0AC 5F               (                     boot/boot.s):00188         clrb                    ; zero is like 256
+D0AD B6FFD9           (                     boot/boot.s):00189 sdbiz   lda     sdctl
+D0B0 81E0             (                     boot/boot.s):00190         cmpa    #$e0
+D0B2 26F9             (                     boot/boot.s):00191         bne     sdbiz           ; byte not ready
+D0B4 B6FFD8           (                     boot/boot.s):00192         lda     sddata          ; get byte
+D0B7 A7A0             (                     boot/boot.s):00193         sta     ,y+             ; store in sector buffer
+D0B9 5A               (                     boot/boot.s):00194         decb
+D0BA 26F1             (                     boot/boot.s):00195         bne     sdbiz           ; next
+                      (                     boot/boot.s):00196 
+                      (                     boot/boot.s):00197         ;; b is zero (like 256) so ready to spin again
+D0BC B6FFD9           (                     boot/boot.s):00198 sdbiz2  lda     sdctl
+D0BF 81E0             (                     boot/boot.s):00199         cmpa    #$e0
+D0C1 26F9             (                     boot/boot.s):00200         bne     sdbiz2          ; byte not ready
+D0C3 B6FFD8           (                     boot/boot.s):00201         lda     sddata          ; get byte
+D0C6 A7A0             (                     boot/boot.s):00202         sta     ,y+             ; store in sector buffer
+D0C8 5A               (                     boot/boot.s):00203         decb
+D0C9 26F1             (                     boot/boot.s):00204         bne     sdbiz2          ; next
+                      (                     boot/boot.s):00205 
+D0CB 862E             (                     boot/boot.s):00206         lda     #'.'            ; indicate load progress
+D0CD 17FF95           (                     boot/boot.s):00207         lbsr    tovdu
+                      (                     boot/boot.s):00208 
+D0D0 108ED0D8         (                     boot/boot.s):00209         ldy     #sctbuf         ; where next byte will come from
+D0D4 39               (                     boot/boot.s):00210         rts
+                      (                     boot/boot.s):00211 
+                      (                     boot/boot.s):00212 ;;; location on SDcard of kernel
+                      (                     boot/boot.s):00213 ;;; hack!! The code here assumes NO WRAP from lba1 to lba2.
+D0D5 03               (                     boot/boot.s):00214 lba2    .db     klba2
+D0D6 00               (                     boot/boot.s):00215 lba1    .db     klba1
+D0D7 00               (                     boot/boot.s):00216 lba0    .db     klba0
+                      (                     boot/boot.s):00217 
+                      (                     boot/boot.s):00218 
+                      (                     boot/boot.s):00219 
+     D0D8             (                     boot/boot.s):00220 sctbuf  equ     .
+D0D8                  (                     boot/boot.s):00221         .ds     512             ; SDcard sector buffer
+D2D8                  (                     boot/boot.s):00222         .ds     100             ; space for stack
+     D33C             (                     boot/boot.s):00223 stack   equ     .
+                      (                     boot/boot.s):00224 
+                      (                     boot/boot.s):00225         end     start
