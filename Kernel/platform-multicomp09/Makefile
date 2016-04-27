@@ -17,7 +17,7 @@ OBJS  = $(COBJS) $(AOBJS) $(DOBJS) $(CDOBJS)
 
 # to save intermediate files (eg, assembler) add -save-temps=cwd
 # and do the same thing in cpu-6809/rules.mk
-CROSS_CCOPTS += -I../dev/ -save-temps=cwd
+CROSS_CCOPTS += -I../dev/
 
 JUNK = $(CSRCS:.c=.o) $(ASRCS:.s=.o) $(DSRCS:.c=.o)
 

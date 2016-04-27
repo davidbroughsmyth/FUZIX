@@ -189,6 +189,11 @@ upgrade is required.
 * are not uniform either..
 * BUG how to set CMDLINE? even if not set, cmdline gets defined.. and even though *cmdline is 0
 * --> no, that was a result of me hard-defining the boot device.
+* BUG loader does not spot overlapped section or section that overflows address
+  space
+* BUG Library/libs/fuzix has Makefile but this is a derived file and should
+  probably not be committed.. then remove from .gitignore
+
 
 *************************
 BUGS
