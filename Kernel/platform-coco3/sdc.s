@@ -3,10 +3,7 @@
 ;;;    Big thanks for Darren Atkinson for good documentation
 ;;;    and help with autodetection in the init method
 ;;;
-;;; 
-
-;;; imported
-	.globl blk_op		; blk operation arguments
+;;;
 
 ;;; exported
 	.globl _devsdc_write
@@ -63,10 +60,4 @@ rdChnk 	ldu    	,y              ; read 1st pair of bytes for the chunk
 	deca                    ; decrement loop counter
 	bne    	rdChnk          ; loop if more chunks to read
 	puls	y,u,pc		; return
-	
-
-
-
-
-
 

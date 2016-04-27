@@ -104,7 +104,7 @@ make -C Standalone
 
 # 5. Build boot disk image
 cd Standalone/filesystem-src
-./build-filesystem -X fuzix.dsk 256 65535
+./build-filesystem -X fuzixfs.dsk 256 65535
 
 
 

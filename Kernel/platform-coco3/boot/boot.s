@@ -34,12 +34,13 @@ start
 	std	$88
 	lda	#'F		; print F
 	jsr	0xa282		;
-	;; Move to task one
-	ldx	#$ffa0
-	ldu	#$ffa8
-	ldd	,x++		; copy mmu regs
-	std	,u++
-	ldd	,x++
+	;; Make the memory mappings for task0 and task1 identical
+        ;; by copying task0 values (currently in use) to task1
+	ldx	#$ffa0          ; mapping registers for task0
+	ldu	#$ffa8          ; mapping registers for task1
+	ldd	,x++		; copy mmu regs from task0 to task1
+	std	,u++            ; 2-at-a-time..
+	ldd	,x++            ; ..until all 8 have been copied
 	std	,u++
 	ldd	,x++
 	std	,u++
@@ -76,24 +77,27 @@ start
 	pshs	b		; save on stack
 	ldb	#1
 	stb	$6f		; switch in/out routine to disk file #1
-c@	jsr	$a176		; get a byte in A
-	cmpa	#$ff		; compare A to ff
-	beq	post		; jump to post able handling
-	;; preamble
-	jsr	getw		; D = length address
-	tfr	d,y		; U = length
+c@	jsr	$a176		; get a byte in A from buffer
+	cmpa	#$ff		; postamble marker?
+	beq	post		; yes, handle it and we're done.
+	;; expect preamble
+	cmpa	#0		; preamble marker?
+        lbne    abort           ; unexpected.. bad format
+	jsr	getw		; D = length
+	tfr	d,y		; Y = length
 	jsr	getw		; D = load address
 	jsr	setload		; set load address
+        ;; load section: Y bytes into memory
 d@	jsr	$a176		; A = byte
 	jsr	tick
 	jsr	putb		; put into kernel memory
-	leay	-1,y		; decrement U
+	leay	-1,y		; decrement Y
 	bne	d@		; loop
 	bra	c@		; try next byte in stream
-	;; postable
+	;; postamble
 post	jsr	getw		; get zero's
-	cmpd	#0		; test D
-	lbne	abort		; abort if not zero
+	cmpd	#0		; test D.. expect 0
+	lbne	abort		; unexpected.. bad format
 	jsr	getw		; get exec address
 	pshs	d		; save on stack
 	jsr	close		; close DECB file
@@ -255,7 +259,7 @@ inc@	ldx	#$4000		; inc pos
 	inc	$ffaa
 	bra	a@
 
-;;; Abort!
+;;; Abort! Bad record format encountered.
 abort
 	ldx	#fnf-1
 	jsr	$b99c
