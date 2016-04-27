@@ -9,14 +9,15 @@ ASRCS += tricks.s commonmem.s usermem_sam.s floppy.s
 
 COBJS = $(CSRCS:.c=$(BINEXT))
 AOBJS = $(ASRCS:.s=$(BINEXT))
-OBJS  = $(COBJS) $(AOBJS)
+DOBJS = $(patsubst ../dev/%.c,%.o, $(DSRCS))
+OBJS  = $(COBJS) $(AOBJS) $(DOBJS)
 
 CROSS_CCOPTS += -I../dev/
 
 JUNK = $(CSRCS:.c=.o) $(ASRCS:.s=.o) \
        d64_1.decb d64_1.rom d64_2.rom cart1.rom cart2.rom
 
-all:	$(OBJS)
+all: $(OBJS)
 
 $(COBJS): %$(BINEXT): %.c
 	$(CROSS_CC) $(CROSS_CCOPTS) $(CROSS_CC_SEG2) -c $<
