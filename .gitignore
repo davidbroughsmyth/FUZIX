@@ -8,3 +8,7 @@
 *.sym
 *.o
 cscope.*
+# Library archives
+*.a
+# Emacs backup
+*~
