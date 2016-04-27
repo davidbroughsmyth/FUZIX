@@ -12,13 +12,13 @@
 	;; exported symbols
 	.globl	start
 
-	;; startup code @0
+	;; startup code at offset 0
 	.area 	.start
-	jmp	start
+start:  jmp	main
 
 	.area 	.text
 
-start:	orcc 	#0x10		; interrupts definitely off
+main:	orcc 	#0x10		; interrupts definitely off
 	lds 	#kstack_top
 
 	;; zero out kernel's bss section
