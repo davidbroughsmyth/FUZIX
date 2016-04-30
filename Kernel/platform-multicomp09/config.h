@@ -73,11 +73,11 @@
 /* Block device define. Each block device can have upto 16 partitions */
 /* [NAC HACK 2016Apr26] superhack!! Although I claim 3 drives I abort the ide setup before
    the drive data is assigned ans therefore only 1 is actually defined.. so the SD drive is hda1 */
-#define MAX_BLKDEV  3     /* 2 IDE + 1 SD [NAC HACK 2016Apr25]  fix up.. */
+#define MAX_BLKDEV  1     /* 2 IDE + 1 SD [NAC HACK 2016Apr25]  fix up.. */
 
 
-#define  DEVICE_IDE        /* enable if IDE interface present */
-#define  CONFIG_IDE
+#undef   DEVICE_IDE        /* enable if IDE interface present */
+#undef   CONFIG_IDE
 
 #define CONFIG_SD
 #define CONFIG_SDC

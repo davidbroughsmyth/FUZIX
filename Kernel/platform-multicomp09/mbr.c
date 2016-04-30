@@ -53,6 +53,7 @@ void mbr_parse(char letter)
 	
 
         /* [NAC HACK 2016Apr26] huh? br->magic isn't initialised ?? */
+        /* ..not true: the blkdev->transfer() initialises it.       */
 	/* FIX: should also check table's CRC */
 	/* if(!blk_op.blkdev->transfer() || br->magic != MBR_SIGNATURE){ */
 	/* 	kputs("No CCPT"); */
