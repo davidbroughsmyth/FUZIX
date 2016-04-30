@@ -193,7 +193,7 @@ upgrade is required.
   space
 * BUG Library/libs/fuzix has Makefile but this is a derived file and should
   probably not be committed.. then remove from .gitignore
-
+* BUG assembler binary output does not pad from ORG to ORG.. affects boot.s
 
 *************************
 BUGS
