@@ -61,7 +61,7 @@ void devide_init_drive(uint8_t drive)
     }
 
     kprintf("IDE drive %d: ", drive);
-    return; /* [NAC HACK 2016Apr25] [NAC HACK 2016Apr25] */
+
     ide_select(drive);
 
 #ifdef IDE_8BIT_ONLY
