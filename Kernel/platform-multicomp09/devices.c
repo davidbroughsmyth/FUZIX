@@ -6,7 +6,9 @@
 #include <tty.h>
 #include <vt.h>
 #include <devtty.h>
+#ifdef CONFIG_IDE
 #include <devide.h>
+#endif
 #include <devsd.h>
 #include <blkdev.h>
 /* [NAC HACK 2016Apr24] add ds1302 */
