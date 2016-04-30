@@ -5,10 +5,23 @@
 ;;; This code started as a frankensteinian fusion of Brett's Coco3
 ;;; booter and my FLEX bootstrap loader.
 ;;;
-;;; This booter is <1 512-byte sectors long and can live anywhere on
-;;; SD. It is loaded to 0xd000 and entered from there. It uses a
-;;; 512byte disk buffer beyond its end point and a 100-byte stack
-;;; beyond that.. so its whole footprint is <1Kbyte.
+;;; The booter is contained within a single 512-byte sector and is
+;;; formatted like a standard MSDOS master boot record (MBR) -- except
+;;; that the code is 6809 and not position-independent.
+;;;
+;;; An MBR is intended to go in sector 0 but I cannot easily arrange
+;;; that on my SD and so I have placed it elsewhere -- and added an
+;;; option to the FUZIX MBR parser to look for it at an arbitrary
+;;; location. The partition data in the MBR is still absolute, though;
+;;; *not* relative to the location of the MBR.
+;;;
+;;; The booter (the whole MBR) can live anywhere on the SD. It is loaded
+;;; to 0xd000 and entered from there -- the load address is chosen simply
+;;; to avoid the kernel; it may change in future if I adjust the memory
+;;; map.
+;;;
+;;; The booter uses a 512byte disk buffer beyond its end point and a small
+;;; 100-byte stack beyond that.. so its whole footprint is just >1Kbyte.
 ;;;
 ;;; Environment: at entry, the multicomp ROM is disabled and the
 ;;; MMU is enabled and is set up for a flat (1-1) mapping, with TR=0.
@@ -19,7 +32,8 @@
 ;;; [NAC HACK 2016Apr22] todo: don't actually NEED a disk buffer..
 ;;; do without it.. but then need a routine to flush the remaining
 ;;; data (if any) from the SDcard after the last sector's done
-;;; with and before jumping into the loaded image.
+;;; with and before jumping into the loaded image. Then, put the stack
+;;; within the footprint, too, as there's plenty of room.
 
 ;;; --------- multicomp i/o registers
 
@@ -41,10 +55,13 @@ klba0	equ $0
 ;;; based on the memory map, this seems a safe place to load; the
 ;;; kernel doesn't use any space here. That may change and require
 ;;; a re-evaluation.
-	org	$d000
+start   equ $d000
+
+
+	org	start
 
 ;;; entry point
-start	lds	#stack
+	lds	#stack
 
 	lda	#'F'		; show user that we got here
 	bsr	tovdu
@@ -209,13 +226,73 @@ sdbiz2	lda	sdctl
 	ldy	#sctbuf		; where next byte will come from
 	rts
 
-;;; location on SDcard of kernel
+;;; location on SDcard of kernel (24-bit LBA value)
 ;;; hack!! The code here assumes NO WRAP from lba1 to lba2.
-lba2	.db     klba2
-lba1	.db     klba1
-lba0	.db     klba0
+lba2	fcb     klba2
+lba1	fcb     klba1
+lba0	fcb     klba0
 
 
+;;; horrible fudge to compensate for assembler lackings..
+	zmb	218
+
+;;; For MBR format, see:
+;;; http://wiki.osdev.org/MBR_%28x86%29
+;;; http://wiki.osdev.org/Partition_Table
+
+	org	start+$1b4
+mbr_uid
+	.ds	10
+
+	org	start+$1be
+mbr_0
+	fcb	$80		; not bootable (ignored by FUZIX)
+	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
+	fcb	$01,$02,$03,$04	; system ID (ignored by FUZIX??)
+	fcb	$ff,$ff,$ff	; end: "max out" as before
+	;; 32-bit values are stored little-endian: LS byte first.
+	;; 65535-block root disk at 0x0003.1000
+	fcb	$00,$10,$03,$00	; partition's starting sector
+	fcb	$fe,$ff,$00,$00	; partition's sector count
+
+	org	start+$1be
+mbr_1
+	fcb	$80		; not bootable (ignored by FUZIX)
+	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
+	fcb	$01,$02,$03,$04	; system ID (ignored by FUZIX)
+	fcb	$ff,$ff,$ff	; end: "max out" as before
+	;; 32-bit values are stored little-endian: LS byte first.
+	;; 65535-block additional disk at 0x0004.1000
+	fcb	$00,$10,$04,$00	; partition's starting sector
+	fcb	$fe,$ff,$00,$00	; partition's sector count
+
+
+	org	start+$1be
+mbr_2
+	fcb	$80		; not bootable (ignored by FUZIX)
+	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
+	fcb	$00,$00,$00,$00	; system ID (0=> unused)
+	fcb	$ff,$ff,$ff	; end: "max out" as before
+	;; 32-bit values are stored little-endian: LS byte first.
+	fcb	$00,$01,$02,$fc	; partition's starting sector
+	fcb	$00,$01,$02,$fc	; partition's sector count
+
+
+	org	start+$1be
+mbr_3
+	fcb	$80		; not bootable (ignored by FUZIX)
+	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
+	fcb	$00,$00,$00,$00	; system ID (0=> unused)
+	fcb	$ff,$ff,$ff	; end: "max out" as before
+	;; 32-bit values are stored little-endian: LS byte first.
+	fcb	$00,$10,$03,$00	; partition's starting sector
+	fcb	$fe,$ff,$00,$00	; partition's sector count
+
+
+	org	start+$1fe
+mbr_sig
+	fcb	$55
+	fcb	$aa
 
 sctbuf	equ	.
 	.ds	512		; SDcard sector buffer
