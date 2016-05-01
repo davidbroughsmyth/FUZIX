@@ -234,7 +234,8 @@ lba0	fcb     klba0
 
 
 ;;; horrible fudge to compensate for assembler lackings..
-	zmb	218
+;;; explicitly pad to reach offset $1b4
+	zmb	230
 
 ;;; For MBR format, see:
 ;;; http://wiki.osdev.org/MBR_%28x86%29
@@ -244,22 +245,22 @@ lba0	fcb     klba0
 mbr_uid
 	.ds	10
 
-	org	start+$1be
-mbr_0
-	fcb	$80		; not bootable (ignored by FUZIX)
+        ;; offset $1be
+mbr_1
+	fcb	$80		; bootable (but flag is ignored by FUZIX)
 	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
-	fcb	$01,$02,$03,$04	; system ID (ignored by FUZIX??)
+	fcb	$01     	; system ID (not 0, not 0x5, 0xf or 0x85)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
 	;; 65535-block root disk at 0x0003.1000
 	fcb	$00,$10,$03,$00	; partition's starting sector
-	fcb	$fe,$ff,$00,$00	; partition's sector count
+	fcb	$fd,$ff,$00,$00	; partition's sector count
 
-	org	start+$1be
-mbr_1
-	fcb	$80		; not bootable (ignored by FUZIX)
+        ;; offset $1ce
+mbr_2
+	fcb	$80		; bootable (but flag is ignored by FUZIX)
 	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
-	fcb	$01,$02,$03,$04	; system ID (ignored by FUZIX)
+	fcb	$01     	; system ID (any non-zero value OK for FUZIX)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
 	;; 65535-block additional disk at 0x0004.1000
@@ -267,29 +268,28 @@ mbr_1
 	fcb	$fe,$ff,$00,$00	; partition's sector count
 
 
-	org	start+$1be
-mbr_2
-	fcb	$80		; not bootable (ignored by FUZIX)
+        ;; offset $1de
+mbr_3
+	fcb	$80		; bootable (but flag is ignored by FUZIX)
 	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
-	fcb	$00,$00,$00,$00	; system ID (0=> unused)
+	fcb	$00     	; system ID (0=> unused)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
 	fcb	$00,$01,$02,$fc	; partition's starting sector
 	fcb	$00,$01,$02,$fc	; partition's sector count
 
 
-	org	start+$1be
-mbr_3
-	fcb	$80		; not bootable (ignored by FUZIX)
+        ;; offset $1ee
+mbr_4
+	fcb	$80		; bootable (but flag is ignored by FUZIX)
 	fcb	$ff,$ff,$ff	; start: "max out" CHS so LBA values will be used.
-	fcb	$00,$00,$00,$00	; system ID (0=> unused)
+	fcb	$00	        ; system ID (0=> unused)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
 	fcb	$00,$10,$03,$00	; partition's starting sector
 	fcb	$fe,$ff,$00,$00	; partition's sector count
 
-
-	org	start+$1fe
+        ;; offset $1fe
 mbr_sig
 	fcb	$55
 	fcb	$aa

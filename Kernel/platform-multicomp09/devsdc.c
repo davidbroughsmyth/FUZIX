@@ -91,9 +91,10 @@ uint8_t devsdc_transfer(void)
 	/* do the low-level data transfer (512 bytes) */
 	fptr( blk_op.addr );
 
-	/* [NAC HACK 2016Apr25] hopefully don't need this.. check. */
-	blk_op.lba+=2;
-	blk_op.addr+=512;
+        /* [NAC HACK 2016May01] I *think* -- but I'm not sure -- that this
+           routine should NOT alter .lba or .addr.. the coco3 versions DO and that
+           breaks (eg) the Kernel/dev/mbr.c (which coco3 does not use but which I do)
+        */
 
 	/* No mechanism for failing so assume success! */
 	return 1;

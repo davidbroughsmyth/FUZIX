@@ -1,17 +1,17 @@
 
-CSRCS = ttydw.c mbr.c
+CSRCS = ttydw.c
 CSRCS += devices.c main.c libc.c devsdc.c
 
 CDSRCS = 
 
-DSRCS = ../dev/devdw.c ../dev/blkdev.c
+DSRCS = ../dev/devdw.c ../dev/blkdev.c ../dev/mbr.c
 
 ASRCS = multicomp09.s crt0.s
 ASRCS += tricks.s commonmem.s usermem_gime.s drivewire.s sdc.s videoll.s
 
 COBJS = $(CSRCS:.c=$(BINEXT))
 AOBJS = $(ASRCS:.s=$(BINEXT))
-DOBJS = devdw.o blkdev.o
+DOBJS = devdw.o blkdev.o mbr.o
 CDOBJS = $(CDSRCS:.c=$(BINEXT))
 OBJS  = $(COBJS) $(AOBJS) $(DOBJS) $(CDOBJS)
 

@@ -67,6 +67,7 @@ The multicomp SDcard holds multiple OS/disk images so the FUZIX stuff cannot
 start at block 0. Want space for a kernel, a swap file, a root disk and a second
 disk.
 
+The bootloader  starts at block 0x3.0400 on the SDcard
 The kernel      starts at block 0x3.0000 on the SDcard
 The rootfs      starts at block 0x3.1000 on the SDcard
 The boot loader starts at block 0x3.0400 on the SDcard
@@ -194,6 +195,8 @@ upgrade is required.
 * BUG Library/libs/fuzix has Makefile but this is a derived file and should
   probably not be committed.. then remove from .gitignore
 * BUG assembler binary output does not pad from ORG to ORG.. affects boot.s
+* BUG the pcw8256 tree has some checked-in ~ files.
+
 
 *************************
 BUGS

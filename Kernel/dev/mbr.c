@@ -37,7 +37,10 @@ void mbr_parse(char letter)
     blk_op.is_read = true;
     blk_op.is_user = false;
     blk_op.addr = (uint8_t *)br;
-    blk_op.lba = 0;
+    /*
+    blk_op.lba = 0; [NAC HACK 2016Apr30] mbr at special place
+    */
+    blk_op.lba = 0x00030400;
 
     do{
         blk_op.nblock = 1;
@@ -55,8 +58,9 @@ void mbr_parse(char letter)
 	    kputs("< ");
 	}
 
-	br_offset = blk_op.lba;
-	blk_op.lba = 0;
+	/*	br_offset = blk_op.lba; [NAC HACK 2016May01] restore it to 0..*/
+	br_offset = 0;
+        blk_op.lba = 0;
 
 	for(i=0; i<MBR_ENTRY_COUNT && next < MAX_PARTITIONS; i++){
 	    switch(br->partition[i].type){
