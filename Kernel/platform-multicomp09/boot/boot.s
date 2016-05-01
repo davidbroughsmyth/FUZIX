@@ -20,14 +20,19 @@
 ;;; to avoid the kernel; it may change in future if I adjust the memory
 ;;; map.
 ;;;
-;;; The booter uses a 512byte disk buffer beyond its end point and a small
-;;; 100-byte stack beyond that.. so its whole footprint is just >1Kbyte.
+;;; The booter is completely self-contained within a 512-byte footprint:
+;;; it uses no disk buffer and its small stack is allocated within its
+;;; memory footprint.
 ;;;
 ;;; Environment: at entry, the multicomp ROM is disabled and the
 ;;; MMU is enabled and is set up for a flat (1-1) mapping, with TR=0.
 ;;; Function: load and start a DECB image (the FUZIX kernel). The
 ;;; location of the image on the SDcard is hard-wired by equates
 ;;; klba2..klba0 below.
+
+klba2	equ $3                  ; LBA=0x0003.0000
+klba1	equ $0
+klba0	equ $0
 
 ;;; --------- multicomp i/o registers
 
@@ -42,9 +47,6 @@ sdlba2	equ $ffdc
 uartdat	equ $ffd1
 uartsta	equ $ffd0
 
-klba2	equ $3
-klba1	equ $0
-klba0	equ $0
 
 ;;; based on the memory map, this seems a safe place to load; the
 ;;; kernel doesn't use any space here. That may change and require
