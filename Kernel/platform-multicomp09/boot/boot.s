@@ -29,12 +29,6 @@
 ;;; location of the image on the SDcard is hard-wired by equates
 ;;; klba2..klba0 below.
 
-;;; [NAC HACK 2016Apr22] todo: don't actually NEED a disk buffer..
-;;; do without it.. but then need a routine to flush the remaining
-;;; data (if any) from the SDcard after the last sector's done
-;;; with and before jumping into the loaded image. Then, put the stack
-;;; within the footprint, too, as there's plenty of room.
-
 ;;; --------- multicomp i/o registers
 
 ;;; sdcard control registers
@@ -90,9 +84,9 @@ start   equ $d000
 ;;;	   3 exec high
 ;;;	   4 exec low
 
-;;; Y - preserved as pointer to disk buffer. Start at empty
-;;; buffer to trigger a disk load.
-	ldy	#sctbuf+512
+;;; Y - counts how many bytes remain to be transferred from disk;
+;;; Start empty to trigger the initial disk load.
+	ldy	#0
 
 c@	jsr	getb		; get a byte in A from buffer
 	cmpa	#$ff		; postamble marker?
@@ -116,6 +110,7 @@ post	jsr	getw		; get zero's
 	lbne	abort		; unexpected.. bad format
 	jsr	getw		; get exec address
 	pshs	d		; save on stack
+        jsr     drain           ; leave SD controller idle
 	rts			; go and never come back
 
 
@@ -150,10 +145,9 @@ vdubiz	ldb	uartsta
 
 ;;;
 ;;; SUBROUTINE ENTRY POINT
-;;; get next word from disk buffer - read sector/refill buffer
-;;; if necessary
+;;; get next word from disk - trigger a new 512-byte read if necessary.
 ;;; return word in D
-;;; must preserve Y which is a global pointing to the next char in the buffer
+;;; must preserve Y which is a global tracking the bytes remaining
 
 getw	jsr	getb		; A = high byte
 	tfr	a,b		; B = high byte
@@ -164,27 +158,48 @@ getw	jsr	getb		; A = high byte
 
 ;;;
 ;;; SUBROUTINE ENTRY POINT
-;;; get next byte from disk buffer - read sector/refill buffer
-;;; if necessary
+;;; get next byte from disk - trigger a new 512-byte read if necessary.
 ;;; return byte in A
 ;;; Destroys A, B.
-;;; must preserve Y which is a global pointing to the next char in the buffer
+;;; must preserve Y which is a global tracking the bytes remaining
 
-getb	cmpy	#sctbuf+512	; out of data?
+getb	cmpy	#0      	; out of data?
 	bne	getb4		; go read byte if not
 getb2	bsr	read		; read next sector, reset Y
 	ldd	lba1		; point to next linear block
 	addd	#1
 	std	lba1
-getb4	lda	,y+		; get next character
-	rts
+
+getb4	lda	sdctl
+	cmpa	#$e0
+	bne	getb4		; byte not ready
+	lda	sddata		; get byte
+        leay    -1,y
+done	rts
 
 
 ;;;
 ;;; SUBROUTINE ENTRY POINT
-;;; read single 512-byte block from lba0, lba1, lba2 to
-;;; buffer at sctbuf.
-;;; return Y pointing to start of buffer.
+;;; read and discard any pending bytes - to leave the SD controller in
+;;; a polite state.
+;;; Destroys A, B, Y
+
+drain	cmpy	#0      	; out of data?
+	beq	done		; if so, finished
+
+drain1	lda	sdctl
+	cmpa	#$e0
+	bne	drain1		; byte not ready
+	lda	sddata		; get byte
+        leay    -1,y
+	bra     drain
+
+
+;;;
+;;; SUBROUTINE ENTRY POINT
+;;; read single 512-byte block from lba0, lba1, lba2.
+;;; Do not transfer any actual data,
+;;; return Y showing how many bytes are available
 ;;; Destroys A, B
 ;;;
 
@@ -198,32 +213,10 @@ read	lda	lba0		; load block address to SDcontroller
 	clra
 	sta	sdctl		; issue RD command to SDcontroller
 
-	ldy	#sctbuf		; where to put it
-
-;;; now transfer 512 bytes, waiting for each in turn.
-
-	clrb			; zero is like 256
-sdbiz	lda	sdctl
-	cmpa	#$e0
-	bne	sdbiz		; byte not ready
-	lda	sddata		; get byte
-	sta	,y+		; store in sector buffer
-	decb
-	bne	sdbiz		; next
-
-	;; b is zero (like 256) so ready to spin again
-sdbiz2	lda	sdctl
-	cmpa	#$e0
-	bne	sdbiz2		; byte not ready
-	lda	sddata		; get byte
-	sta	,y+		; store in sector buffer
-	decb
-	bne	sdbiz2		; next
-
 	lda	#'.'		; indicate load progress
 	lbsr	tovdu
 
-	ldy	#sctbuf		; where next byte will come from
+	ldy	#512		; 512 bytes available
 	rts
 
 ;;; location on SDcard of kernel (24-bit LBA value)
@@ -232,12 +225,19 @@ lba2	fcb     klba2
 lba1	fcb     klba1
 lba0	fcb     klba0
 
+;;; 16 bytes of stack. Since we have plenty of space, reserve it within the
+;;; 512 bytes of the boot loader itself. By inspection, the code uses 7 bytes
+;;; of stack so this is more than generous (interrupts are disabled)
+        fcb     0,0,0,0,0,0,0,0
+        fcb     0,0,0,0,0,0,0,0
+stack	equ	.
+
 
 ;;; Surprisingly, the org statement doesn't achieve this.. it
 ;;; doesn't pad the binary. Instead we need to calculate the
 ;;; padding that we want to introduce.
 	zmb	start+$1b4-.
-        ;; 	zmb	230
+
 
 ;;; For MBR and partition table formats, see:
 ;;; http://wiki.osdev.org/MBR_%28x86%29
@@ -257,7 +257,7 @@ mbr_1
 	;; 32-bit values are stored little-endian: LS byte first.
 	;; 65535-block root disk at 0x0003.1000
 	fcb	$00,$10,$03,$00	; partition's starting sector
-	fcb	$fd,$ff,$00,$00	; partition's sector count
+	fcb	$fe,$ff,$00,$00	; partition's sector count
 
         ;; offset $1ce
 mbr_2
@@ -296,10 +296,5 @@ mbr_4
 mbr_sig
 	fcb	$55
 	fcb	$aa
-
-sctbuf	equ	.
-	.ds	512		; SDcard sector buffer
-	.ds	100		; space for stack
-stack	equ	.
 
 	end	start
