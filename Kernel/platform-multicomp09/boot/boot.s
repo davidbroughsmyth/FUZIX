@@ -233,17 +233,20 @@ lba1	fcb     klba1
 lba0	fcb     klba0
 
 
-;;; horrible fudge to compensate for assembler lackings..
-;;; explicitly pad to reach offset $1b4
-	zmb	230
+;;; Surprisingly, the org statement doesn't achieve this.. it
+;;; doesn't pad the binary. Instead we need to calculate the
+;;; padding that we want to introduce.
+	zmb	start+$1b4-.
+        ;; 	zmb	230
 
-;;; For MBR format, see:
+;;; For MBR and partition table formats, see:
 ;;; http://wiki.osdev.org/MBR_%28x86%29
 ;;; http://wiki.osdev.org/Partition_Table
 
-	org	start+$1b4
+        ;; offset $1b4
 mbr_uid
-	.ds	10
+	fcb     0,0,0,0,0       ; likewise, ".ds 10" does not occupy
+        fcb     0,0,0,0,0       ; any space in the binary.
 
         ;; offset $1be
 mbr_1

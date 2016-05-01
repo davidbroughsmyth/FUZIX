@@ -194,7 +194,8 @@ upgrade is required.
   space
 * BUG Library/libs/fuzix has Makefile but this is a derived file and should
   probably not be committed.. then remove from .gitignore
-* BUG assembler binary output does not pad from ORG to ORG.. affects boot.s
+* BUG LWASM binary output does not pad from ORG to ORG.. affects boot.s - this is kinda documented
+* BUG LWASM binary output does not pad as a result of .ds directives.. affects boot.s - this is not documented
 * BUG the pcw8256 tree has some checked-in ~ files.
 
 
