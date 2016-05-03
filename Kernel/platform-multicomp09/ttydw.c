@@ -236,7 +236,6 @@ void dw_vpoll( ){
 		if( buf[0] < 32 ){
 			int i;
 			unsigned char b[3];
-			char c;
 			int min;
 			int minor=dw_minor( buf[0]-17 );
 			b[0]=DW_SERREADM;
