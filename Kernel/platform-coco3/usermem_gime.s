@@ -125,7 +125,7 @@ __uput:
 	pshs	u,y,cc
 	orcc	#0x10
 	ldd	9,s		; save count
-	cmpd	#WINTR		; are we smaller then treshold?
+	cmpd	#WINTR		; are we smaller than threshold?
 	blo	__uput1		; yes then do old routine
 	std	count
 	ldd	7,s		; save user address

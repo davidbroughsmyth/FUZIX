@@ -5,14 +5,30 @@
 ;;;     Color Computer 3 GIME mmu
 ;;;
 
+;;; multicomp09 HW registers
+;;; [NAC HACK 2016May03] maybe I should define these all as offsets from IOBASE..
+;;; then index any of them from a single register.
+MMUADR	equ	$ffde
+MMUDAT	equ	$ffdf
+
+;;; bit-fields
+MMUADR_ROMDIS	equ $80		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_TR	equ $40		; 0 after reset, 0 when FUZIX boots. 0=map0, 1=map1
+MMUADR_MMUEN	equ $20		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_NMI	equ $10		; 0 after reset, 0 when FUZIX boots. Do not write 1.
+MMUADR_MAPSEL	equ $0f		; last-written value is UNDEFINED.
+;;; the only two useful values for the upper nibble
+MMU_MAP0	equ	(MMUADR_ROMDIS|MMUADR_MMUEN)
+MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
+
 	include "kernel.def"
         include "../kernel09.def"
 
 	;; window xfer treshhold - any user/krn space xtfers
 	;; bigger than this will be routed to the banking/windowing
 	;; transfers, rather than the original slower routines
-WINTR	equ	256		; window xfer treshold 
-	
+WINTR	equ	256		; window xfer threshold
+
 	; exported
 	.globl 	__ugetc
 	.globl 	__ugetw
@@ -26,6 +42,7 @@ WINTR	equ	256		; window xfer treshold
 	; imported
 	.globl 	map_process_always
 	.globl 	map_kernel
+	.globl _krn_mmu_map
 
 	.area 	.common
 
@@ -125,7 +142,7 @@ __uput:
 	pshs	u,y,cc
 	orcc	#0x10
 	ldd	9,s		; save count
-	cmpd	#WINTR		; are we smaller then treshold?
+	cmpd	#WINTR		; are we smaller than threshold?
 	blo	__uput1		; yes then do old routine
 	std	count
 	ldd	7,s		; save user address
@@ -206,40 +223,64 @@ a@	std	,u
 ;;; this routine pre-calculates how many bytes we can copy without
 ;;; remapping the mmu, copies those bytes, *then* re-computes the
 ;;; mmu banking and repeats until all bytes are transfered.
+;;;
+;;; assume: map0 (kernel map) is in use.
+;;; "borrow" the low 4 kernel MMU mappings; treating them as 2, 16K
+;;; windows, map kernel space into the lower and user space into the
+;;; upper, then copy from one to the other. At the end of the routine,
+;;; restore the kernel MMU mappings from the values stored in
+;;; _krn_mmu_map.
 uxfer:
-	;; save kernel mmu mapping
-	ldd	$ffa8
-	ldx	$ffaa
-	pshs	d,x
 	;; make a data stack
 	leau	-8,s		; allow 4 levels in S
 	;; calc max src
-b@	ldd	krn		; calc max byte copiable from source
+b@	ldd	krn		; calc max byte copyable from source
 	bsr	max		; and push it onto data stack
 	;; calc max dest
 	ldd	usr		; calc max byte copyable from destination
 	bsr	max		; and push it onto data stack
 	;; compare count to all
 	ldd	count		; push total bytes to copy onto data stack
- 	pshu	d		; 
+ 	pshu	d		;
 	bsr	min		; find the minimum of all three
 	bsr	min		;
 	pulu	d		; get the result from data stack
-	std	icount		; 
+	std	icount		;
 	;; set kernel bank window (at CPU addr 0x0000)
-	ldy	#$ffa8		; Y = beginning of mmu
+	ldy	#MMUADR		; Y = beginning of mmu.. for storing
 	lda	krn		; get kernel ptr
 	rola			; rotate top two bits
 	rola			; down to the bottom
 	rola			;
 	lsla			; multiply by two
 	anda	#7		; clean off extra bits
-	ldx	#$ffa8		; kernel's mmu ptr
+	ldx	#_krn_mmu_map	; kernel's mmu ptr.. for reading
+	;;
+	;;
+	;; gime uses: ldb a,x  to get MMU entry based on the maths above
+	;;
+	;; BUT in our case we use _krn_mmu_map which has 1 byte for every
+	;; 2 entries, because we know they are used in pairs.
+	;; gime: 0 1 2 3 4 5 6 7
+	;; us:   0 0 1 1 2 2 3 3
+	lsra			; multicomp fixup
+	;;
+	;; [NAC HACK 2016May03] recode later to remove redundancy.
+	;;
+	;;
+	ldb	#(MMU_MAP1|8)
+	stb	0,y		; MMUADR set mapsel=8
+	;;
 	ldb	a,x		; get mmu entry
-	stb	,y+		; store in mmu
-	inca			; increment index
-	ldb	a,x		; get next mmu entry
-	stb	,y+		; store in mmu
+	stb	1,y		; MMUDAT store in mmu
+        ;;
+	;;
+	ldb	#(MMU_MAP1|9)
+	stb	0,y		; MMUADR set mapsel=9
+	;;
+	ldb	a,x		; SAME mmu entry as before
+        incb                    ; correct because we know they're used in pairs
+	stb	1,y		; MMUDAT store in mmu
 	ldd	krn		; get kernel ptr
 	anda	#$3f		; get 16k offset
 	pshs	u		; save data stack
@@ -249,12 +290,20 @@ b@	ldd	krn		; calc max byte copiable from source
 	rola			; rotate top three bits
 	rola			; down to the bottom of A
 	rola			;
-	anda	#3		; mask off junk
+	anda	#3		; mask off junk [NAC HACK 2016May03] why not 7??
 	ldx	#U_DATA__U_PAGE	; X = ptr to user page table
+	;;
+	ldb	#(MMU_MAP1|10)
+	stb	0,y		; MMUADR set mapsel=10
+	;;
 	ldb	a,x		; B = page table entry
-	stb	,y+		; store in MMU
-	incb			; increment for next page no
-	stb	,y+		; store in mmu
+	stb	1,y		; MMUDAT store in MMU
+	incb			; increment for next page no [NAC HACK 2016May03] coz we use page pairs?
+	;;
+	lda	#(MMU_MAP1|11)	; use A because B is busy this time
+	sta	0,y		; MMUADR set mapsel=11
+	;;
+	stb	1,y		; MMUDAT store in mmu
 	ldd	usr		; get destination
 	anda	#$3f		; get 16k offset
 	addd	#0x4000		; add window base
@@ -264,17 +313,33 @@ b@	ldd	krn		; calc max byte copiable from source
 	tst	way		; which way are we copying?
 	beq	a@		; to userspace no dest/src swapping
 	exg	u,x		; flip to copy the other way....
-a@	lda	,u+		; get a byte 
+a@	lda	,u+		; get a byte
 	sta	,x+		; store it
 	leay	-1,y		; bump counter
 	bne	a@		; loop if not done
 	;; end inner loop
 	puls	u		; restore data stack
+	;;
 	;; clean up kernel mmu's for next mapping or returning
-	puls	d,x
-	pshs	d,x
-	std	0xffa8
-	stx	0xffaa
+	ldx	#MMUADR
+	ldy	#_krn_mmu_map
+	lda	#(MMU_MAP1|8)
+	sta	,x		; MMUADR set mapsel=8 (1st krn entry)
+	ldb	,y+
+	stb	1,x		; MMUDAT krn[0] to mapsel 8
+	inca
+	sta	,x		; MMUADR set mapsel=9
+	incb
+	stb	1,x		; MMUDAT krn[0]+1 to mapsel 9
+	inca
+	sta	,x		; MMUADR set mapsel=10
+	ldb	,y+
+	stb	1,x		; MMUDAT krn[1] to mapsel 10
+	inca
+	sta	,x		; MMUADR set mapsel=11
+	incb
+	stb	1,x		; MMUDAT krn[1]+1 to mapsel 11
+	;;
 	;; increment out loop variables
 	ldd	krn		; add this iteration's byte count
 	addd	icount		; from source address
@@ -287,7 +352,6 @@ a@	lda	,u+		; get a byte
 	std	count
 	lbne	b@		; if bytes left to copy then repeat
 	;; return
-	leas	4,s		; drop saved kernel map
 	ldx 	#0		; return #0 - success
 	puls 	u,y,cc,pc	; return
 

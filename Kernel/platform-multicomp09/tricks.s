@@ -1,6 +1,27 @@
 ;;;
-;;; CoCo3 ghoulish tricks (boo!)
+;;; CoCo3 ghoulish tricks (boo!) ported to multicomp09
 ;;;
+
+
+;;; [NAC HACK 2016May01] want all the hw reg definitions in a common place.
+
+;;; multicomp09 HW registers
+MMUADR	equ	$ffde
+MMUDAT	equ	$ffdf
+
+;;; bit-fields
+MMUADR_ROMDIS	equ $80		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_TR	equ $40		; 0 after reset, 0 when FUZIX boots. 0=map0, 1=map1
+MMUADR_MMUEN	equ $20		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_NMI	equ $10		; 0 after reset, 0 when FUZIX boots. Do not write 1.
+MMUADR_MAPSEL	equ $0f		; last-written value is UNDEFINED.
+;;; the only two useful values for the upper nibble
+MMU_MAP0	equ	(MMUADR_ROMDIS|MMUADR_MMUEN)
+MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
+
+
+
+
         .module tricks
 
 	;; imported
@@ -8,6 +29,8 @@
         .globl _chksigs
         .globl _getproc
         .globl _trap_monitor
+        .globl _krn_mmu_map
+        .globl _usr_mmu_map
 
 	;; exported
         .globl _switchout
@@ -20,7 +43,7 @@
 
 
 	.area .data
-;;; _ramrop cannot be in common, as this memory becomes per-process
+;;; _ramtop cannot be in common, as this memory becomes per-process
 ;;; when we add better udata handling.
 _ramtop:
 	.dw 0
@@ -75,11 +98,28 @@ _switchin:
 	stx 	_swapstack	; save passed page table *
 
 	;; flip in the newly choosen task's common page
+;;;	lda	P_TAB__P_PAGE_OFFSET+3,x
+;;;	inca
+
+;;; [NAC HACK 2016May01] assume for now that we don't need to record this in *_mmu_map ???
+;;;     sta	0xffa7          ; top of user map
+;;;	sta	0xffaf          ; top of kernel map
+
+;;; [NAC HACK 2016May01] assume we're running as kernel
+;;; [NAC HACK 2016May03] this is only flipping in top 4K .. as is coco3.
+;;; [NAC HACK 2016May03] we didn't record the update to the krn or user mappings..
+;;; [NAC HACK 2016May03] why do I assume that's OK???
+        lda     #(MMU_MAP1|7)
+        sta     MMUADR
 	lda	P_TAB__P_PAGE_OFFSET+3,x
 	inca
-	sta	0xffa7
-	sta	0xffaf
-	
+        sta     MMUDAT
+        lda     #(MMU_MAP1|$f)
+        sta     MMUADR
+	lda	P_TAB__P_PAGE_OFFSET+3,x
+	inca
+        sta     MMUDAT
+
 	;; --------- No Stack ! --------------
 
         ; check u_data->u_ptab matches what we wanted
@@ -203,28 +243,41 @@ loop@	ldb	,x+		       ; B = child's next page
 	jsr	copybank		 ; copy it
 	;; remap common page in MMU to new process
 skip2@	incb
-	stb	0xffaf
-	stb	0xffa7
+        ;;
+        ;; [NAC HACK 2016May03] assume we're still in kernel mapping
+        ;;
+        ;; 	stb	0xffaf
+        ;; 	stb	0xffa7
+        lda     #(MMU_MAP1|$f)
+        sta     MMUADR
+        stb     MMUDAT
+        lda     #(MMU_MAP1|7)
+        sta     MMUADR
+        stb     MMUDAT
+	;;
 	; --- we are now on the stack copy, parent stack is locked away ---
 	rts	; this stack is copied so safe to return on
 
 ;;; Copy data from one bank to another
 ;;;   takes: B = dest bank, A = src bank
+;;; uses low 32Kbyte of kernel address space as the "window" for this
+;;; use map 8,9 (0x0000-0x3fff) for dest, map 10,11 (0x4000-0x7fff) for source
 copybank
-	pshs	d,x,u
-	;; save mmu state
-	ldd	0xffa8	
-	pshs	d
-	ldd	0xffaa
-	pshs	d
-	;; map in src and dest
-	ldd	4,s		; D = banks
-	stb	0xffa8
-	incb
-	stb	0xffa9
-	sta	0xffaa
-	inca
-	sta	0xffab
+	pshs	d,x,u,y		; changing this will affect "ldb 1,s" below
+	;; map in dest
+	ldx	#MMUADR		; for storing
+	lda	#(MMU_MAP1+8)	; mapsel=8, for dest, in B
+	std	,x		; mapsel=8, page in B
+	inca			; mapsel=9
+	incb			; adjacent page
+	std	,x
+	;; map in src
+	inca			; mapsel=a
+	ldb	0,s		; stacked value of A into B
+	std	,x
+	inca			; mapsel=b
+	incb			; adjacent page
+	std	,x
 	;; loop setup
 	ldx	#0		; dest address
 	ldu	#0x4000		; src address
@@ -248,9 +301,20 @@ a@	ldd	,u++
 	cmpx	#0x4000		; end of copy?
 	bne	a@		; no repeat
 	;; restore mmu
-	puls	d
-	std	0xffaa
-	puls	d
-	std	0xffa8
+	ldy	#_krn_mmu_map	; kernel's mmu ptr.. for reading
+	ldx	#MMUADR		; for storing
+	lda	#(MMU_MAP1+8)
+	ldb	,y+		; page from krn_mmu_map
+	std	,x		; write MMUADR with mapsel=8 then write MMUDAT with page from krn_mmu_map
+	inca			; next mapsel
+	incb			; adjacent page
+	std	,x		; write MMUADR with mapsel=9 then write MMUDAT with next page
+
+	inca			; next mapsel
+	ldb	,y+		; page from krn_mmu_map
+	std	,x		; write MMUADR with mapsel=a then write MMUDAT with page from krn_mmu_map
+	inca			; next mapsel
+	incb			; adjacent page
+	std	,x		; write MMUADR with mapsel=b then write MMUDAT with next page
 	;; return
-	puls	d,x,u,pc		; return
+	puls	d,x,u,y,pc	; return
