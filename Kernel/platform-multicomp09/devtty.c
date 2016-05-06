@@ -16,6 +16,9 @@
 /* [NAC HACK 2016Apr23] hack to allow linking.. needs fixing!! */
 int vt_ioctl(uint8_t minor, uarg_t request, char *data) { return 0; }
 
+/* [NAC HACK 2016May05] unused, but without it the emulator core dumps. Hmm */
+int curminor = 1;
+
 
 /* Multicomp has 3 serial ports. Each is a cut-down 6850, with fixed BAUD rate and word size.
    Port 0 is, by default, a virtual UART interface to a VGA output and PS/2 keyboard
@@ -36,9 +39,6 @@ static uint8_t *uart[] = {
 #define VSECT __attribute__((section(".video")))
 #define VSECTD __attribute__((section(".videodata")))
 
-
-/* [NAC HACK 2016Apr24] to go? */
-extern uint8_t hz;
 
 
 uint8_t vtattr_cap;
@@ -77,9 +77,6 @@ struct s_queue ttyinq[NUM_DEV_TTY + 1] = {
 };
 
 
-
-/* current minor for input */
-int curminor = 1;
 
 
 /* A wrapper for tty_close that closes the DW port properly */
@@ -149,6 +146,21 @@ void tty_interrupt(void)
 
 void platform_interrupt(void)
 {
+	//	uint8_t c;
+	/* Check each UART for characters and dispatch if available
+	   .. assuming I eventually get around to enabling serial Rx interrupts
+	   this will just get perkier with no additional coding required
+	   [NAC HACK 2016May05]  enable serial interrupts!!
+
+	   **Really** need to get non-blocking input working on the emulator..
+	*/
+	/* c = *(uart[1*2 + 1]);
+	if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
+	c = *(uart[2*2 + 1]);
+	if (c & 0x01) { tty_inproc(2, *(uart[2*2])); }
+	c = *(uart[3*2 + 1]);
+	if (c & 0x01) { tty_inproc(3, *(uart[3*2])); } */
+
 	timer_interrupt();
 	dw_vpoll();
 }

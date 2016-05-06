@@ -89,7 +89,6 @@ MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
 	    .globl map_save
 	    .globl map_restore
 	    .globl _need_resched
-	    .globl _hz
 	    .globl _bufpool
 	    .globl _discard_size
             .globl _krn_mmu_map
@@ -205,9 +204,6 @@ _irqrestore:			; B holds the data
 ; -----------------------------------------------------------------------------
 ; KERNEL MEMORY BANK
 ; -----------------------------------------------------------------------------
-	.area	.data
-_hz:	.db	0  		; Is machine in 50hz?
-
 
         .area .discard
 
