@@ -205,7 +205,11 @@ drain1	lda	sdctl
 ;;; Destroys A, B
 ;;;
 
-read	lda	lba0		; load block address to SDcontroller
+read    lda	sdctl
+	cmpa	#$80
+	bne	read            ; wait for previous command to complete
+
+	lda	lba0		; load block address to SDcontroller
 	sta	sdlba0
 	lda	lba1
 	sta	sdlba1
