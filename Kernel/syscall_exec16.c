@@ -135,7 +135,6 @@ arg_t _execve(void)
 		goto nogood2;
 	}
 	top = *(uint16_t *)(buf + 8);
-        kprintf("Top is %x\n",top);
 	if (top == 0)	/* Legacy 'all space' binary */
 		top = ramtop;
 	else	/* Requested an amount, so adjust for the base */
@@ -146,7 +145,6 @@ arg_t _execve(void)
 	/* Binary doesn't fit */
 	bin_size = ino->c_node.i_size;
 	progptr = bin_size + 1024 + bss;
-        kprintf("Top is %x bss is %x bin_size is %x progptr is %x\n",top,bss,bin_size,progptr);
 	if (top - PROGBASE < progptr || progptr < bin_size) {
 		udata.u_error = ENOMEM;
 		goto nogood2;
