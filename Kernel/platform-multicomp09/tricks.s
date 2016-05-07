@@ -31,6 +31,7 @@ MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
         .globl _trap_monitor
         .globl _krn_mmu_map
         .globl _usr_mmu_map
+	.globl curr_tr
 
 	;; exported
         .globl _switchout
@@ -97,28 +98,28 @@ _switchin:
 
 	stx 	_swapstack	; save passed page table *
 
-	;; flip in the newly choosen task's common page
-;;;	lda	P_TAB__P_PAGE_OFFSET+3,x
-;;;	inca
+;;; [NAC HACK 2016May03] this is only flipping in top 8K .. as is coco3.
+	lda	curr_tr		; [NAC HACK 2016May07] I assume we're running in krn but
+				; I'm not 100% sure..
+	ora	#7		; top 8K of usr map
+	sta	MMUADR
 
-;;; [NAC HACK 2016May01] assume for now that we don't need to record this in *_mmu_map ???
-;;;     sta	0xffa7          ; top of user map
-;;;	sta	0xffaf          ; top of kernel map
-
-;;; [NAC HACK 2016May01] assume we're running as kernel
-;;; [NAC HACK 2016May03] this is only flipping in top 4K .. as is coco3.
-;;; [NAC HACK 2016May03] we didn't record the update to the krn or user mappings..
-;;; [NAC HACK 2016May03] why do I assume that's OK???
-        lda     #(MMU_MAP1|7)
-        sta     MMUADR
+	;; flip in the newly choosen task's common page to usr map
 	lda	P_TAB__P_PAGE_OFFSET+3,x
 	inca
-        sta     MMUDAT
-        lda     #(MMU_MAP1|$f)
-        sta     MMUADR
+	sta	MMUDAT
+	sta	_usr_mmu_map+7	; keep the mirror in sync.
+
+	lda	curr_tr		; [NAC HACK 2016May07] I assume we're running in krn but
+				; I'm not 100% sure..
+	ora	#$f		; top 8K of krn map
+	sta	MMUADR
+
+	;; flip in the newly choosen task's common page to krn map
 	lda	P_TAB__P_PAGE_OFFSET+3,x
 	inca
-        sta     MMUDAT
+	sta	MMUDAT
+	sta	_krn_mmu_map+7	; keep the mirror in sync.
 
 	;; --------- No Stack ! --------------
 
@@ -244,16 +245,22 @@ loop@	ldb	,x+		       ; B = child's next page
 	;; remap common page in MMU to new process
 skip2@	incb
         ;;
-        ;; [NAC HACK 2016May03] assume we're still in kernel mapping
         ;;
         ;; 	stb	0xffaf
         ;; 	stb	0xffa7
-        lda     #(MMU_MAP1|$f)
+	lda	curr_tr		; [NAC HACK 2016May07] I assume we're running in krn but
+				; I'm not 100% sure..
+	ora	#$f		; top 8K of krn map
         sta     MMUADR
         stb     MMUDAT
-        lda     #(MMU_MAP1|7)
+	stb	_krn_mmu_map+7	; keep the mirror in sync.
+
+	lda	curr_tr		; [NAC HACK 2016May07] I assume we're running in krn but
+				; I'm not 100% sure..
+	ora	#7		; top 8K of usr map
         sta     MMUADR
         stb     MMUDAT
+	stb	_usr_mmu_map+7	; keep the mirror in sync.
 	;;
 	; --- we are now on the stack copy, parent stack is locked away ---
 	rts	; this stack is copied so safe to return on
@@ -305,16 +312,15 @@ a@	ldd	,u++
 	ldx	#MMUADR		; for storing
 	lda	#(MMU_MAP1+8)
 	ldb	,y+		; page from krn_mmu_map
-	std	,x		; write MMUADR with mapsel=8 then write MMUDAT with page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=8, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,x		; write MMUADR with mapsel=9 then write MMUDAT with next page
-
+	ldb	,y+		; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=9, then write B to MMUDAT
 	inca			; next mapsel
-	ldb	,y+		; page from krn_mmu_map
-	std	,x		; write MMUADR with mapsel=a then write MMUDAT with page from krn_mmu_map
+	ldb	,y+		; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=a, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,x		; write MMUADR with mapsel=b then write MMUDAT with next page
+	ldb	,y+		; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=b, then write B to MMUDAT
 	;; return
 	puls	d,x,u,y,pc	; return

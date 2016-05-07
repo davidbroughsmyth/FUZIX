@@ -93,6 +93,7 @@ MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
 	    .globl _discard_size
             .globl _krn_mmu_map
             .globl _usr_mmu_map
+	    .globl curr_tr
 
             ; exported debugging tools
             .globl _trap_monitor
@@ -137,16 +138,24 @@ _need_resched
 
 ;;; multicomp09 mmu registers are write-only so need to store
 ;;; a copy of the mappings.
-;;; Each byte represents one of the physical address quadrants.
-;;; a stored value of N means that 8K RAM pages N and N+1 are assigned to
-;;; that quadrant.
+;;; Each byte represents one of the 8Kbyte physical address regions.
+;;; In general, pages are assigned in pairs, but that is not true for the top
+;;; 8Kbyte of address space, so my first attempt (just to store 4 bytes per map)
+;;; came unstuck.
+;;; [NAC HACK 2016May07] may not need to store usr_mmu_map at all.. review later.
+;;;
 ;;; Need to write these values any time we're changing the MMU mapping.. UNLESS
 ;;; it's clear that the routine is subsequently going to restore a value that is
 ;;; currently stored here.
+;;;
+;;; The values of 0-7 set here for _krn_mmu_map are used to initialise the MMU
+;;; mappings for the kernel. Don't change them!!
+;;; The values of 0-7 set here for _usr_mmu_map reflect how the user mappings
+;;; are set up when the kernel is started - so don't change them either!
 _krn_mmu_map
-	.db	0,2,4,6
+	.db	0,1,2,3,4,5,6,7
 _usr_mmu_map
-	.db	0,2,4,6
+	.db	0,1,2,3,4,5,6,7
 
 
 _trap_monitor:
@@ -155,7 +164,10 @@ _trap_monitor:
 
 _trap_reboot:
 	orcc 	#0x10		; turn off interrupts
-	lda	#0x38		; put RAM block in memory
+        bra     _trap_reboot    ; [NAC HACK 2016May07] endless loop
+
+
+        lda	#0x38		; put RAM block in memory
 	sta	0xffa8		;
 	;; copy reboot bounce routine down
 	ldx	#0		;
@@ -237,51 +249,48 @@ init_hardware:
 ;;; multicomp09 currently has map0 selected and blocks 0-7 mapped.
 ;;; To match the coco3 set-up need to select blocks 0-7 for map1 then switch to map1.
 ;;; Want to end with _krn_mmu_map and _usr_mmu_map and curr_tr all correct.
-;;; 
+;;;
 
-;;; [NAC HACK 2016May01] todo
 	;; set up the map1 registers (MAPSEL=8..f) to use pages 0-7
 	;; ..to match the pre-existing setup of map0.
+	;; _krn_mmu_map is set up with the required values.
 	;; while doing this, were careful to keep MMUADR_MAP1 *clear* because we are using
 	;; map0 and don't want to switch the map yet.
 	lda	#(MMU_MAP0|8)	; stay in map0, select 1st mapping register for map1
-	ldy	#MMUADR
+	ldx	#MMUADR
 
-	ldx	#_krn_mmu_map
-	ldb	,x+	   	; page from krn_mmu_map
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=8
+	ldy	#_krn_mmu_map
+	ldb	,y+   		; page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=8, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=9
-
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=9, then write B to MMUDAT
 	inca			; next mapsel
-	ldb	,x+		; page from krn_mmu_map
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=a
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=a, then write B to MMUDAT
 	inca			; next mapsel
-	incb		   	; adjacent page
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=b
-
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=b, then write B to MMUDAT
 	inca			; next mapsel
-	ldb	,x+		; page from krn_mmu_map
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=c
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=c, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=d
-
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=d, then write B to MMUDAT
 	inca			; next mapsel
-	ldb	,x+		; page from krn_mmu_map
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=e
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=e, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,y		; select MAPSEL and immediately write MMUDAT mapsel=f
+	ldb     ,y+     	; next page from krn_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=f, then write B to MMUDAT
 
 	;; swap to map1
 	;; the two labels generate entries in the map file that are useful
 	;; when debugging: did we get past this step successfully.
 gomap1:	lda	#MMU_MAP1
-	sta	,y
+	sta	,x
 	sta	curr_tr
-atmap1:	nop
+atmap1:
 
 
 	;; Multicomp09 has RAM up at the hardware vector positions
@@ -293,7 +302,7 @@ atmap1:	nop
 	sty	,x++		; SWI2 handler
 	ldy	#firq_handler
 	sty	,x++		; FIRQ handler
-	ldy	#my_interrupt_handler
+	ldy	#interrupt_handler
 	sty	,x++		; IRQ  handler
 	ldy	#unix_syscall_entry
 	sty	,x++		; SWI  handler
@@ -316,6 +325,8 @@ xinihw:	rts
 ;;;   returns: nothing
 ;;; [NAC HACK 2016May01] but.. X (page table pointer) not used??
 ;;; [NAC HACK 2016May01] this can be smaller and tidier. Point to MMUADR and do indexed access.
+;;; [NAC HACK 2016May07] pushes x,u but uses neither. Could be smaller if we used X to point
+;;; to MMUADR... not so!! the indirect access grabs the value of X from the stack.
 _program_vectors:
 	;; copy the common section into user-space
 	pshs	x,u
@@ -323,8 +334,8 @@ _program_vectors:
 	;; setup the null pointer / sentinal bytes in low process memory
 	lda	#(MMU_MAP1|8)
 	sta	MMUADR
-
-	lda	[1,s]	     ; get process's blk address for address 0
+        ;; [NAC HACK 2016May07] access stacked X
+	lda	[0,s]	     ; get process's blk address for address 0
 	sta	MMUDAT	     ; put in our mmu ( at address 0 )
 	lda	#0x7E
 	sta	0
@@ -337,13 +348,7 @@ _program_vectors:
 
 	puls	pc,x,u	     ; restore reg and return
 
-;;; This clear the interrupt source before calling the
-;;; normal handler
-;;;    takes: nothing ( it is an interrupt handler)
-;;;    returns: nothing ( it is an interrupt handler )
-my_interrupt_handler
-;	lda	$ff02		; clear pia irq latch by reading data port
-	jmp	interrupt_handler ; jump to regular handler
+
 
 ;;;  FIXME:  these interrupt handlers should prolly do something
 ;;;  in the future.
@@ -392,44 +397,53 @@ map_kernel:
 map_process_2:
 	pshs	x,y,a
 
-	;; first copy 4 entries from page table to usr_mmu_map
+	;; first, copy entries from page table to usr_mmu_map
 	ldy	#_usr_mmu_map
+
 	lda	,x+		; get byte from page table
-	sta	0,y		; copy to usr_mmu_map
+	sta	,y+		; copy to usr_mmu_map
+	inca			; increment to get next 8K block
+	sta	,y+		; copy to usr_mmu_map
+
 	lda	,x+		; get byte from page table
-	sta	1,y		; copy to usr_mmu_map
+	sta	,y+		; copy to usr_mmu_map
+	inca			; increment to get next 8K block
+	sta	,y+		; copy to usr_mmu_map
+
 	lda	,x+		; get byte from page table
-	sta	2,y		; copy to usr_mmu_map
-	lda	,x+		; get byte from page table
-	sta	3,y		; copy to usr_mmu_map
-;;; [NAC HACK 2016May01] revamp init code above to swap x,y to match this.
+	sta	,y+		; copy to usr_mmu_map
+	inca			; increment to get next 8K block
+	sta	,y+		; copy to usr_mmu_map
+
+	lda	,x+		; bank all but common memory
+	sta	,y		;
+
 	;; now, update MMU with those values
 	lda	#(MMU_MAP1|0)	; stay in map1, select mapsel=0
 	ldx	#MMUADR
+	ldy	#_usr_mmu_map	; go back to start [NAC HACK 2016May07] or could use offsets above..
 
-	ldb	,y+		; page from usr_mmu_map
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=0
+	ldb	,y+   		; page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=8, then write B to MMUDAT
 	inca			; next mapsel
-	incb			; adjacent page
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=1
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=9, then write B to MMUDAT
+	inca			; next mapsel
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=a, then write B to MMUDAT
+	inca			; next mapsel
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=b, then write B to MMUDAT
+	inca			; next mapsel
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=c, then write B to MMUDAT
+	inca			; next mapsel
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=d, then write B to MMUDAT
+	inca			; next mapsel
+	ldb     ,y+     	; next page from usr_mmu_map
+	std	,x		; Write A to MMUADR to set MAPSEL=e, then write B to MMUDAT
 
-	inca			; next mapsel
-	ldb	,y+		; page from usr_mmu_map
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=2
-	inca			; next mapsel
-	incb		   	; adjacent page
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=3
-
-	inca			; next mapsel
-	ldb	,y+		; page from usr_mmu_map
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=4
-	inca			; next mapsel
-	incb			; adjacent page
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=5
-
-	inca			; next mapsel
-	ldb	,y+		; page from usr_mmu_map
-	std	,x		; select MAPSEL and immediately write MMUDAT mapsel=6
 	;; bank all but common memory.
 
 	lda	#MMU_MAP0

@@ -257,16 +257,6 @@ b@	ldd	krn		; calc max byte copyable from source
 	ldx	#_krn_mmu_map	; kernel's mmu ptr.. for reading
 	;;
 	;;
-	;; gime uses: ldb a,x  to get MMU entry based on the maths above
-	;;
-	;; BUT in our case we use _krn_mmu_map which has 1 byte for every
-	;; 2 entries, because we know they are used in pairs.
-	;; gime: 0 1 2 3 4 5 6 7
-	;; us:   0 0 1 1 2 2 3 3
-	lsra			; multicomp fixup
-	;;
-	;; [NAC HACK 2016May03] recode later to remove redundancy.
-	;;
 	;;
 	ldb	#(MMU_MAP1|8)
 	stb	0,y		; MMUADR set mapsel=8
@@ -278,8 +268,8 @@ b@	ldd	krn		; calc max byte copyable from source
 	ldb	#(MMU_MAP1|9)
 	stb	0,y		; MMUADR set mapsel=9
 	;;
-	ldb	a,x		; SAME mmu entry as before
-        incb                    ; correct because we know they're used in pairs
+        inca                    ; increment index [NAC HACK 2016May07] or a,x+ above and omit this??
+	ldb	a,x		; get next mmu entry
 	stb	1,y		; MMUDAT store in mmu
 	ldd	krn		; get kernel ptr
 	anda	#$3f		; get 16k offset
@@ -324,21 +314,17 @@ a@	lda	,u+		; get a byte
 	ldx	#MMUADR
 	ldy	#_krn_mmu_map
 	lda	#(MMU_MAP1|8)
-	sta	,x		; MMUADR set mapsel=8 (1st krn entry)
-	ldb	,y+
-	stb	1,x		; MMUDAT krn[0] to mapsel 8
-	inca
-	sta	,x		; MMUADR set mapsel=9
-	incb
-	stb	1,x		; MMUDAT krn[0]+1 to mapsel 9
-	inca
-	sta	,x		; MMUADR set mapsel=10
-	ldb	,y+
-	stb	1,x		; MMUDAT krn[1] to mapsel 10
-	inca
-	sta	,x		; MMUADR set mapsel=11
-	incb
-	stb	1,x		; MMUDAT krn[1]+1 to mapsel 11
+        ldb     ,y+             ; page from _krn_mmu_map
+        std     ,x              ; Write A to MMUADR to set MAPSEL=8, then write B to MMUDAT
+        inca                    ; next mapsel
+        ldb     ,y+             ; next page from _krn_mmu_map
+        std     ,x              ; Write A to MMUADR to set MAPSEL=9, then write B to MMUDAT
+        inca                    ; next mapsel
+        ldb     ,y+             ; next page from _krn_mmu_map
+        std     ,x              ; Write A to MMUADR to set MAPSEL=a, then write B to MMUDAT
+        inca                    ; next mapsel
+        ldb     ,y+             ; next page from _krn_mmu_map
+        std     ,x              ; Write A to MMUADR to set MAPSEL=b, then write B to MMUDAT
 	;;
 	;; increment out loop variables
 	ldd	krn		; add this iteration's byte count

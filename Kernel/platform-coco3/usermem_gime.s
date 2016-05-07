@@ -237,7 +237,7 @@ b@	ldd	krn		; calc max byte copiable from source
 	ldx	#$ffa8		; kernel's mmu ptr
 	ldb	a,x		; get mmu entry
 	stb	,y+		; store in mmu
-	inca			; increment index
+	inca			; increment index [NAC HACK 2016May07] or a,x+ above and omit this??
 	ldb	a,x		; get next mmu entry
 	stb	,y+		; store in mmu
 	ldd	krn		; get kernel ptr
@@ -253,7 +253,7 @@ b@	ldd	krn		; calc max byte copiable from source
 	ldx	#U_DATA__U_PAGE	; X = ptr to user page table
 	ldb	a,x		; B = page table entry
 	stb	,y+		; store in MMU
-	incb			; increment for next page no
+	incb			; increment for next page no [NAC HACK 2016May03] coz we use page pairs?
 	stb	,y+		; store in mmu
 	ldd	usr		; get destination
 	anda	#$3f		; get 16k offset

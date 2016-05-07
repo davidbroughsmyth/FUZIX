@@ -65,7 +65,7 @@ uint8_t devsdc_transfer(void)
 	/* wait for drive to go non-busy after previous command
 	   (if any)
 	*/
-	while ((sdc_reg_ctl & SDC_IDLE_STAT) == 0) {
+	while (sdc_reg_ctl != SDC_IDLE_STAT) {
 	}
 
 	/* load up block address. It's stored as a 32-bit value but we
