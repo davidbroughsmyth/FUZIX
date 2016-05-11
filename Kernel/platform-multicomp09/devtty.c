@@ -13,13 +13,6 @@
 #undef  DEBUG			/* UNdefine to delete debug code sequences */
 
 
-/* [NAC HACK 2016Apr23] hack to allow linking.. needs fixing!! */
-int vt_ioctl(uint8_t minor, uarg_t request, char *data) { return 0; }
-
-/* [NAC HACK 2016May05] unused, but without it the emulator core dumps. Hmm */
-int curminor = 1;
-
-
 /* Multicomp has 3 serial ports. Each is a cut-down 6850, with fixed BAUD rate and word size.
    Port 0 is, by default, a virtual UART interface to a VGA output and PS/2 keyboard
    Port 1 is, by default, a serial port
@@ -30,9 +23,9 @@ int curminor = 1;
 */
 static uint8_t *uart[] = {
     0,      0,                               /* Unused */
-    (uint8_t *)0xFFD1, (uint8_t *)0xFFD0,    /* Virtual UART Data, Status port0, tty1 */
-    (uint8_t *)0xFFD3, (uint8_t *)0xFFD2,    /*         UART Data, Status port1, tty2 */
-    (uint8_t *)0xFFD5, (uint8_t *)0xFFD4,    /*         UART Data, Status port2, tty3 */
+    (volatile uint8_t *)0xFFD1, (volatile uint8_t *)0xFFD0,    /* Virtual UART Data, Status port0, tty1 */
+    (volatile uint8_t *)0xFFD3, (volatile uint8_t *)0xFFD2,    /*         UART Data, Status port1, tty2 */
+    (volatile uint8_t *)0xFFD5, (volatile uint8_t *)0xFFD4,    /*         UART Data, Status port2, tty3 */
 };
 
 
@@ -146,7 +139,7 @@ void tty_interrupt(void)
 
 void platform_interrupt(void)
 {
-	//	uint8_t c;
+	uint8_t c;
 	/* Check each UART for characters and dispatch if available
 	   .. assuming I eventually get around to enabling serial Rx interrupts
 	   this will just get perkier with no additional coding required
@@ -154,51 +147,21 @@ void platform_interrupt(void)
 
 	   **Really** need to get non-blocking input working on the emulator..
 	*/
-	/* c = *(uart[1*2 + 1]);
-	if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
-	c = *(uart[2*2 + 1]);
+        c = *(uart[1*2 + 1]);
+        if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
+	/*	c = *(uart[2*2 + 1]);
 	if (c & 0x01) { tty_inproc(2, *(uart[2*2])); }
 	c = *(uart[3*2 + 1]);
 	if (c & 0x01) { tty_inproc(3, *(uart[3*2])); } */
 
-	timer_interrupt();
-	dw_vpoll();
-}
-
-int gfx_ioctl(uint8_t minor, uarg_t arg, char *ptr)
-{
-	if ( minor > 3 )	/* remove once DW get its own ioctl() */
-		return tty_ioctl(minor, arg, ptr);
-	if (arg >> 8 != 0x03)
-		return vt_ioctl(minor, arg, ptr);
-	switch( arg ){
-	case GFXIOC_GETINFO:
-		return 0; //[NAC HACK 2016Apr24] 
-	case GFXIOC_GETMODE:
-		{
-			uint8_t m=ugetc(ptr);
-			if( m > 4 ) goto inval;
-			return 0; //[NAC HACK 2016Apr24] 
-		}
-	case GFXIOC_SETMODE:
-		{
-			return 0; //[NAC HACK 2016Apr24] 
-		}
-	case GFXIOC_DRAW:
-	case GFXIOC_WRITE:
-	case GFXIOC_READ:
-		{
-			return 0; // [NAC HACK 2016Apr24] 
-		}
-	default:
-		break;
+	/* [NAC HACK 2016May07] need defines for the timer */
+	c = *((volatile uint8_t *)0xFFDD);
+	if (c & 0x80) {
+		*((volatile uint8_t *)0xFFDD) = c; /* service the hardware */
+		/* tell the OS it happened */
+		timer_interrupt();
 	}
-
-	udata.u_error = ENOTTY;
-	return -1;
-
-inval:	udata.u_error = EINVAL;
-	return -1;
+	dw_vpoll();
 }
 
 

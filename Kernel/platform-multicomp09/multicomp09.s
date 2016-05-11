@@ -64,6 +64,7 @@
 ;;; multicomp09 HW registers
 MMUADR	equ	$ffde
 MMUDAT	equ	$ffdf
+TIMER   equ     $ffdd
 
 ;;; bit-fields
 MMUADR_ROMDIS	equ $80		; 0 after reset, 1 when FUZIX boots. Leave at 1.
@@ -74,6 +75,10 @@ MMUADR_MAPSEL	equ $0f		; last-written value is UNDEFINED.
 ;;; the only two useful values for the upper nibble
 MMU_MAP0	equ	(MMUADR_ROMDIS|MMUADR_MMUEN)
 MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
+
+TIMER_ON        equ $02
+TIMER_OFF       equ $00
+TIMER_INT       equ $80
 
 
             .module multicomp09
@@ -242,6 +247,9 @@ init_hardware:
 	ldd 	#512-64
 	std 	_procmem
 
+;;; Enable timer interrupt
+        lda     #TIMER_ON
+        sta     TIMER
 
 ;;; [NAC HACK 2016Apr23] coco3 at this point sets up physical blocks 0-7 for user mode.
 ;;; ..which is the same mapping that is in use for kernel mode.

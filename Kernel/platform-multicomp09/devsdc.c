@@ -61,11 +61,21 @@ uint8_t devsdc_transfer(void)
 {
 	uint8_t *ptr;                  /* points to 32 bit lba in blk op */
 	sdc_transfer_function_t fptr;  /* holds which xfer routine we want */
+        int i;
+        uint8_t tmp;
 
 	/* wait for drive to go non-busy after previous command
 	   (if any)
 	*/
 	while (sdc_reg_ctl != SDC_IDLE_STAT) {
+	}
+
+	/* [NAC HACK 2016May11] should not need this but real hardware seems
+	   to need something here even tho CUBIX FORTH NITROS9 FLEX all work
+	   without it and with seemingly equivalent code
+	*/
+	for (i=0; i<1000; i++) {
+		tmp = sdc_reg_ctl;
 	}
 
 	/* load up block address. It's stored as a 32-bit value but we
@@ -90,11 +100,6 @@ uint8_t devsdc_transfer(void)
 
 	/* do the low-level data transfer (512 bytes) */
 	fptr( blk_op.addr );
-
-        /* [NAC HACK 2016May01] I *think* -- but I'm not sure -- that this
-           routine should NOT alter .lba or .addr.. the coco3 versions DO and that
-           breaks (eg) the Kernel/dev/mbr.c (which coco3 does not use but which I do)
-        */
 
 	/* No mechanism for failing so assume success! */
 	return 1;
