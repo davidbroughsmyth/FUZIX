@@ -11,8 +11,8 @@
 	;; window xfer treshhold - any user/krn space xtfers
 	;; bigger than this will be routed to the banking/windowing
 	;; transfers, rather than the original slower routines
-WINTR	equ	256		; window xfer treshold 
-	
+WINTR	equ	256		; window xfer threshold
+
 	; exported
 	.globl 	__ugetc
 	.globl 	__ugetw
@@ -51,7 +51,7 @@ __uget:
 	pshs	u,y,cc
 	orcc	#0x10
 	ldd	9,s		; save count ptr
-	cmpd	#WINTR		; are we smaller than treshold?
+	cmpd	#WINTR		; are we smaller than threshold?
 	blo	__uget1		; yes then goto simple tranfer
 	std	count	
 	ldd	7,s		; save kernel address
@@ -221,11 +221,11 @@ b@	ldd	krn		; calc max byte copiable from source
 	bsr	max		; and push it onto data stack
 	;; compare count to all
 	ldd	count		; push total bytes to copy onto data stack
- 	pshu	d		; 
+ 	pshu	d		;
 	bsr	min		; find the minimum of all three
 	bsr	min		;
 	pulu	d		; get the result from data stack
-	std	icount		; 
+	std	icount		;
 	;; set kernel bank window (at CPU addr 0x0000)
 	ldy	#$ffa8		; Y = beginning of mmu
 	lda	krn		; get kernel ptr
@@ -264,7 +264,7 @@ b@	ldd	krn		; calc max byte copiable from source
 	tst	way		; which way are we copying?
 	beq	a@		; to userspace no dest/src swapping
 	exg	u,x		; flip to copy the other way....
-a@	lda	,u+		; get a byte 
+a@	lda	,u+		; get a byte
 	sta	,x+		; store it
 	leay	-1,y		; bump counter
 	bne	a@		; loop if not done
