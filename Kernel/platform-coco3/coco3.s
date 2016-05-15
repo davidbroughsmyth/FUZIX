@@ -54,11 +54,11 @@ _discard_size:
 ; -----------------------------------------------------------------------------
 ; COMMON MEMORY BANK
 ; -----------------------------------------------------------------------------
-            .area .common
+        .area .common
 
 	
 saved_map
-	.db 0		; which mapping state where we in?
+	.db 0		; which mapping state were we in?
 init1_mirror
 	.db 0		; a *mirror* of gimme $ff91, which is WriteOnly
 _need_resched
@@ -123,7 +123,7 @@ _irqrestore:			; B holds the data
 _hz:	.db	0  		; Is machine in 50hz?
 
 
-            .area .discard
+        .area .discard
 
 ;;;  Stuff to initialize *before* hardware
 ;;;    takes: nothing
@@ -205,7 +205,7 @@ b@	sta	,x+
 ;------------------------------------------------------------------------------
 ; COMMON MEMORY PROCEDURES FOLLOW
 
-            .area .common
+        .area .common
 
 ;;; Platform specific userspace setup
 ;;;   We're going to borrow this to copy the common bank

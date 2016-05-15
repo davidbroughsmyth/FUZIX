@@ -20,7 +20,7 @@
 
 
 	.area .data
-;;; _ramrop cannot be in common, as this memory becomes per-process
+;;; _ramtop cannot be in common, as this memory becomes per-process
 ;;; when we add better udata handling.
 _ramtop:
 	.dw 0
