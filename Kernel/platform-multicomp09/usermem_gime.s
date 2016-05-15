@@ -68,7 +68,7 @@ __uget:
 	pshs	u,y,cc
 	orcc	#0x10
 	ldd	9,s		; save count ptr
-	cmpd	#WINTR		; are we smaller than treshold?
+	cmpd	#WINTR		; are we smaller than threshold?
 	blo	__uget1		; yes then goto simple tranfer
 	std	count	
 	ldd	7,s		; save kernel address
@@ -309,7 +309,6 @@ a@	lda	,u+		; get a byte
 	bne	a@		; loop if not done
 	;; end inner loop
 	puls	u		; restore data stack
-	;;
 	;; clean up kernel mmu's for next mapping or returning
 	ldx	#MMUADR
 	ldy	#_krn_mmu_map
