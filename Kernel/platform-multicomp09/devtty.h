@@ -3,7 +3,7 @@
 
 #include <../include/vt.h>
 #include <../include/graphics.h>
-
+/* [NAC HACK 2016May11] should be able to get rid of all of this */
 struct pty {
 	unsigned char *base;	/* base of buffer in cpu space */
 	unsigned char *cpos;	/* current location of cursor */

@@ -29,6 +29,12 @@ static uint8_t *uart[] = {
 };
 
 
+static int icount = 0;
+static int imatch = 100;
+static uint8_t input[] = "ls -al\nXpwd\nXps\nXwho\nX";
+static int ccount = 0;
+
+
 #define VSECT __attribute__((section(".video")))
 #define VSECTD __attribute__((section(".videodata")))
 
@@ -75,18 +81,19 @@ struct s_queue ttyinq[NUM_DEV_TTY + 1] = {
 /* A wrapper for tty_close that closes the DW port properly */
 int my_tty_close(uint8_t minor)
 {
-	if (minor > 2 && ttydata[minor].users == 1)
+	if (minor > 3 && ttydata[minor].users == 1)
 		dw_vclose(minor);
 	return (tty_close(minor));
 }
 
 
 /* Output for the system console (kprintf etc) */
+/* [NAC HACK 2016May12] should this use minor number of BOOT_TTY or TTYDEV instead of being hard-wired to 1?? */
 void kputchar(char c)
 {
 	if (c == '\n')
-		tty_putc(1, '\r');
-	tty_putc(1, c);
+            tty_putc(minor(TTYDEV), '\r');
+	tty_putc(minor(TTYDEV), c);
 }
 
 ttyready_t tty_writeready(uint8_t minor)
@@ -117,7 +124,7 @@ void tty_sleeping(uint8_t minor)
 
 void tty_setup(uint8_t minor)
 {
-	if (minor > 2) {
+	if (minor > 3) {
 		dw_vopen(minor);
 		return;
 	}
@@ -147,21 +154,34 @@ void platform_interrupt(void)
 
 	   **Really** need to get non-blocking input working on the emulator..
 	*/
-        c = *(uart[1*2 + 1]);
-        if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
+        /*c = *(uart[1*2 + 1]);
+          if (c & 0x01) { tty_inproc(1, *(uart[1*2])); } */
 	/*	c = *(uart[2*2 + 1]);
 	if (c & 0x01) { tty_inproc(2, *(uart[2*2])); }
 	c = *(uart[3*2 + 1]);
 	if (c & 0x01) { tty_inproc(3, *(uart[3*2])); } */
+
+        icount++;
+        if (icount == imatch) {
+		imatch += 200;
+		if (input[ccount] != 0) {
+			while (input[ccount] != 'X') {
+				tty_inproc(minor(TTYDEV), input[ccount++]);
+			}
+			ccount++;
+		}
+        }
+
 
 	/* [NAC HACK 2016May07] need defines for the timer */
 	c = *((volatile uint8_t *)0xFFDD);
 	if (c & 0x80) {
 		*((volatile uint8_t *)0xFFDD) = c; /* service the hardware */
 		/* tell the OS it happened */
-		timer_interrupt();
+		//	timer_interrupt();
 	}
-	dw_vpoll();
+	timer_interrupt();
+	//dw_vpoll();
 }
 
 

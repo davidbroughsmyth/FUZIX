@@ -51,6 +51,7 @@
 /* [NAC HACK 2016Apr24] nicer if I didn't hard-wire this? */
 /* This must be a 16-bit number, not a string! See start.c for examples/encoding */
 /* so this is hda1 */
+/* Without this defined, get prompted for root device at boot time */
 #define BOOTDEVICE 0x0001
 
 /* We need a tidier way to do this from the loader */
