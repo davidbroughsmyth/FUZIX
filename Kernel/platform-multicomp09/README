@@ -1,7 +1,7 @@
 Fuzix for 6809 Multicomp
 
 Copyright 2016, Neal Andrew Crook, under GPL2.
-Derived from Coco3 which is
+Derived from Coco3 port which is
 Copyright 2015, Brett M. Gordon, under GPL2.
 
 This port is for running FUZIX on an FPGA computer called "Multicomp"
@@ -15,12 +15,12 @@ provides the following:
 - ROM is CamelForth, with hooks to boot multiple other OS from SD:
   - Microsoft BASIC, FLEX, CUBIX, Buggy, NitrOS9, FUZIX
 - RAM from 0 to 0xffff except for:
-  - I/O space from 0xffd0-ffdf
+  - I/O space from 0xffd0-0xffdf
 - 50Hz Timer interrupt
 - Hardware single-step
 - SD controller in hw state-machines
-- Virtual 6850-like UART interfacing to an 80x25 ANSI terminal on a VGA
-  display with PS/2 keyboard input
+- Virtual 6850-like UART interfacing to an 80x25 colour ANSI terminal
+  on a VGA display with PS/2 keyboard input
 - Upto 2 6850-like serial UARTs with RS232 or virtual-RS232/USB interfaces
 - coco-style memory mapping unit (2 contexts, 8K banks)
   - upto 1MByte physical RAM
@@ -60,8 +60,8 @@ The kernel must be loaded and started through a platform-dependent process. When
 the kernel starts up it locates and mounts the root disk. The root disk contains
 the /dev tree as well as essential binaries like init.
 
-DECB can contain multiple sections, with different load addresses, and a start
-address. Therefore, it can represent a sparse binary.
+The DECB object file format can contain multiple sections, with different load
+addresses, and a start address. Therefore, it can represent a sparse binary.
 
 The multicomp SDcard holds multiple OS/disk images so the FUZIX stuff cannot
 start at block 0. Want space for a kernel, a swap file, a root disk and a second
@@ -139,6 +139,10 @@ make -C Applications/V7/cmd/sh -f Makefile.6809 TARGET=multicomp09
 make -C Applications/levee -f Makefile.6809 TARGET=multicomp09
 make -C Applications/cave -f Makefile.6809 TARGET=multicomp09
 make -C Applications/dw -f Makefile.6809 TARGET=multicomp09
+make -C Applications/cpp  TARGET=multicomp09
+make -C Applications/as09 TARGET=multicomp09
+make -C Applications/ld09 TARGET=multicomp09
+make -C Applications/V7/games -f Makefile.6809 TARGET=multicomp09
 
 # 4. Build disk tools
 make -C Standalone
@@ -146,6 +150,16 @@ make -C Standalone
 # 5. Build boot disk image
 cd Standalone/filesystem-src && ./build-filesystem -X fuzixfs.dsk 256 65535
 
+# 6. Add extras
+cd Standalone/filesystem-src && ./add-extras -X fuzixfs.dsk
+
+
+** TODO add more stuff from util - including FORTH
+work out where advent.db ought to be.
+Get 2nd PCB working
+Upgrade to have FUZIX in ROM
+Tidy up code - esp. partition table boot scheme
+Then generate GIT patches
 
 
 *************************

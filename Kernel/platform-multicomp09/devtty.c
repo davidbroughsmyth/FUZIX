@@ -29,10 +29,10 @@ static uint8_t *uart[] = {
 };
 
 
-static int icount = 0;
-static int imatch = 100;
-static uint8_t input[] = "ls -al\nXpwd\nXps\nXwho\nX";
-static int ccount = 0;
+/* static int icount = 0; */
+/* static int imatch = 100; */
+/* static uint8_t input[] = "ls -al\nXpwd\nXps\nXwho\nX"; */
+/* static int ccount = 0; */
 
 
 #define VSECT __attribute__((section(".video")))
@@ -154,34 +154,33 @@ void platform_interrupt(void)
 
 	   **Really** need to get non-blocking input working on the emulator..
 	*/
-        /*c = *(uart[1*2 + 1]);
-          if (c & 0x01) { tty_inproc(1, *(uart[1*2])); } */
+        c = *(uart[1*2 + 1]);
+          if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
 	/*	c = *(uart[2*2 + 1]);
 	if (c & 0x01) { tty_inproc(2, *(uart[2*2])); }
 	c = *(uart[3*2 + 1]);
 	if (c & 0x01) { tty_inproc(3, *(uart[3*2])); } */
 
-        icount++;
-        if (icount == imatch) {
-		imatch += 200;
-		if (input[ccount] != 0) {
-			while (input[ccount] != 'X') {
-				tty_inproc(minor(TTYDEV), input[ccount++]);
-			}
-			ccount++;
-		}
-        }
-
+        /* icount++; */
+        /* if (icount == imatch) { */
+	/* 	imatch += 200; */
+	/* 	if (input[ccount] != 0) { */
+	/* 		while (input[ccount] != 'X') { */
+	/* 			tty_inproc(minor(TTYDEV), input[ccount++]); */
+	/* 		} */
+	/* 		ccount++; */
+	/* 	} */
+        /* } */
 
 	/* [NAC HACK 2016May07] need defines for the timer */
 	c = *((volatile uint8_t *)0xFFDD);
 	if (c & 0x80) {
 		*((volatile uint8_t *)0xFFDD) = c; /* service the hardware */
 		/* tell the OS it happened */
-		//	timer_interrupt();
+		timer_interrupt();
 	}
-	timer_interrupt();
-	//dw_vpoll();
+
+	dw_vpoll();
 }
 
 
