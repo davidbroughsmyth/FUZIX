@@ -11,6 +11,7 @@ Multicomp uses a 6809 processor, thus the platform name "multicomp09".
 In its current form, somwhat evolved from Grant's design, multicomp09
 provides the following:
 
+- 6809 running at about 12MHz
 - boot from ROM but ROM can then be switched out of the memory map
 - ROM is CamelForth, with hooks to boot multiple other OS from SD:
   - Microsoft BASIC, FLEX, CUBIX, Buggy, NitrOS9, FUZIX
@@ -25,8 +26,12 @@ provides the following:
 - coco-style memory mapping unit (2 contexts, 8K banks)
   - upto 1MByte physical RAM
 - RTC through DS1302 bit-banged on GPIO port.
-- 6809 running at about 12MHz
 
+More details, including PCBs, software, source code:
+
+http://searle.hostei.com/grant/Multicomp/index.html
+https://github.com/nealcrook/multicomp6809 (and visit the WIKI there)
+https://www.retrobrewcomputers.org/doku.php?id=boards:sbc:multicomp:cycloneii-c:start
 
 This port is based heavily on the coco3 port which itself is based on
 the platform-6809test and the two dragon ports by Tormod Volden.
@@ -64,47 +69,53 @@ The DECB object file format can contain multiple sections, with different load
 addresses, and a start address. Therefore, it can represent a sparse binary.
 
 The multicomp SDcard holds multiple OS/disk images so the FUZIX stuff cannot
-start at block 0. Want space for a kernel, a swap file, a root disk and a second
-disk.
+start at block 0. As well as a boot loader, need to allocate space for
+the kernel, a swap file, a root disk and a second disk.
 
-The bootloader  starts at block 0x3.0400 on the SDcard
-The kernel      starts at block 0x3.0000 on the SDcard
+The boot loader starts at block 0x3.0000 on the SDcard
+The kernel      starts at block 0x3.0400 on the SDcard
 The rootfs      starts at block 0x3.1000 on the SDcard
-The boot loader starts at block 0x3.0400 on the SDcard
 Space is assigned for a 1MByte swap file at 0x3.0800
 Space is assigned for a 2nd file system  at 0x4.1000
 
-All of these values are hard-coded through defines in TODO.
+The location of these files is hard-wired as follows:
 
-The image boot.bin is designed to load and start at address 0xd00. It is ~1kbyte
-in size, including data space. It locates the kernel and parses the DECB format
-to load the kernel to RAM and pass control to it at its start address.
+- All of them are hard-wired in the script that creates the SDcard image.
+- The location of the boot-loader is hard-wired in the CamelForth word FUZIX.
+- The location of the boot-loaded is hard-wired in mbr.c through the definition
+  CONFIG_MBR_OFFSET in config.h for this platform.
+- The location of the kernel is hard-wired in the code section of the boot loader.
+- The location of the rootfs and additional file system is hard-wired in the
+  partition table that forms part of the boot-loader.
 
-Boot from CamelForth looks like this:
+The boot-loader code is in platform-multicomp09/boot/boot.s
 
-HEX MMUMAP
-3 SDLBA2 400 D000 SDRD
-D000 PIVOT
+It is designed to load and start at address 0xd000. It is exactly 512 bytes in
+size and it is laid out like a standard hard drive master boot record (MBR)
+except that:
 
-or, one-liner:
+- The code region contains 6809 code rather than 8086 code.
+- The 4 entries in the partition table specify the locations of the partitions
+  relative to the location of the MBR itself.
 
-HEX MMUMAP 3 SDLBA2 400 D000 SDRD D000 PIVOT
+The boot-loader can be loaded and started from CamelForth like this:
+
+HEX MMUMAP 3 SDLBA2 0 D000 SDRD D000 PIVOT
+
+(the latest version of CamelForth has a word FUZIX defined to do this)
+
+When control passes to the boot-loader, it locates the kernel, parses the DECB
+format to load the kernel to RAM and pass control to it at its start address
+(which is encoded into the DECB file).
 
 
-[NAC HACK 2016Apr23] KEYBOARD and DEVICES sections need update..
 
 *************************
 KEYBOARD
 *************************
 
-Some work needs done on the support on the ALT key shifting.  The ALT
-key is hard to use with a emulators that work in Windows or X, anyway.
-
-The tilde, "~", character can be produced with <F1>
-The pipe, "|", character can be produced with <SHIFT><F1>
-
-Pressing <CTRL><1> will switch to virtual console No. 1.
-Pressing <CTRL><2> will switch to virtual console No. 2.
+The default I/O is the VGA/PS2 keyboard, *or* the RS232 serial port, depending
+upon the setting of the VDUFFD0 jumper.
 
 
 *************************
@@ -112,11 +123,11 @@ DEVICES (so far)
 *************************
 
 node       major   minor     description
-/dev/tty1  2       1   	     console / 
-/dev/tty2  2       2         virtual terminal No. 2.
-/dev/tty3  2       3         virtual terminal No. 3.
-/dev/tty4  2       4         Drivewire Virtual Window #0
-/dev/dw?   8       0-256     Drivewire Block Drives
+/dev/tty1  2       1   	     console
+/dev/tty2  2       2         RS232 port
+/dev/tty3  2       3         USB virtual RS232 port
+/dev/tty4  2       4         Drivewire Virtual Window #0  (coming soon..)
+/dev/dw?   8       0-256     Drivewire Block Drives       (coming soon..)
 
 
 **************************
@@ -154,12 +165,18 @@ cd Standalone/filesystem-src && ./build-filesystem -X fuzixfs.dsk 256 65535
 cd Standalone/filesystem-src && ./add-extras -X fuzixfs.dsk
 
 
-** TODO add more stuff from util - including FORTH
-work out where advent.db ought to be.
-Get 2nd PCB working
-Upgrade to have FUZIX in ROM
-Tidy up code - esp. partition table boot scheme
-Then generate GIT patches
+**************************
+CREATING THE SD CARD
+**************************
+
+If using other Multicomp software, use the normal create_sd_image script. The
+FUZIX-related lines are as follows:
+
+dd if=fuzix_boot.bin of=multicomp09_sd.img obs=512K seek=192
+dd if=fuzix.bin      of=multicomp09_sd.img obs=512K seek=193
+dd if=fuzixfs.dsk of=multicomp09_sd.img obs=1M seek=98
+
+finally, use dd to transfer multicomp09_sd.img to an SD card.
 
 
 *************************
@@ -173,24 +190,11 @@ DONE
 TO DO
 *************************
 
-* Swapping to disk has not been implemented yet, so a standard 512k
-upgrade is required.
-
-* IDE Drivers.
-
-* SDC Drivers.
-
-* SCSI Drivers.
-
-* Better and more DriveWire Virtual Serial Ports.
-
-* Better support of the GIME chip's video modes
-
-* A whole gaggle of things, to numerous to count.
-
 [NAC HACK 2016Apr23] my TO DO
 
-* Rework boot.s to be buffer-less
+* Swapping to disk has not been implemented yet
+* Drivewire driver (should be simple based on Brett's work)
+* RTC driver
 * currently assume 64, 8K pages - like coco3. Want actually to do a memory size and cope with 512K
   or 1MByte
 * unify things that need not be different from coco3
@@ -202,10 +206,7 @@ upgrade is required.
 * BUG fix problem of missing include file that I ended up copying
 * BUG devsd.h has devsd_init but devsdc.c had devsdc_init, so did devices.c The other routine names
 * are not uniform either..
-* BUG how to set CMDLINE? even if not set, cmdline gets defined.. and even though *cmdline is 0
-* --> no, that was a result of me hard-defining the boot device.
-* BUG loader does not spot overlapped section or section that overflows address
-  space
+* BUG loader does not spot overlapped section or section that overflows address space
 * BUG Library/libs/fuzix has Makefile but this is a derived file and should
   probably not be committed.. then remove from .gitignore
 * BUG LWASM binary output does not pad from ORG to ORG.. affects boot.s - this is kinda documented
@@ -214,6 +215,10 @@ upgrade is required.
 * BUG exec09 doesn't detect when an out-of-range memory address in a region
   is accessed.. or when an out-of-range memory page is mapped.
 * BUG exec09 reported this: 01:0x299F 1026FF7B              LBNE  01:0x1291E -- address out of range!!
+* add more stuff from util - including FORTH
+* work out where advent.db ought to be.
+* Get 2nd PCB working
+* Upgrade to have FUZIX in CamelForth ROM
 
 
 *************************

@@ -58,6 +58,13 @@
 /* [NAC HACK 2016Apr24] 0 because we don't have one */
 #define CMDLINE	 NULL	  /* Location of root dev name */
 
+/* Allow MBR to be other than at block 0. If so, the start LBA of partitions
+   defined in the MBR are defined relative to the position of the MBR, not
+   relative to the start of the disk (ie, the values they'd have if the
+   MBR was in block 0)
+*/
+#define CONFIG_MBR_OFFSET (0x30000)
+
 /* Device parameters */
 #define NUM_DEV_TTY 11
 #define TTYDEV   BOOT_TTY /* Device used by kernel for messages, panics */

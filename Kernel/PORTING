@@ -99,6 +99,11 @@ Porting Fuzix to a new Z80 based machine generally requires the following
  so it  can be moved into another segment (eg to be with the video screen data).
  See pcw8256 for an example of this.
 
+ CONFIG_MBR_OFFSET tells dev/mbr.c where to find the MBR. FUZIX knows how to
+ parse a standard DOS master boot record and extract partition table entries
+ to locate and mount drives. A well-behaved disk will have its MBR at block 0.
+ If you need to put your MBR elsewhere, use this.
+
 - Set the basic system parameters
 
  TICKSPERSEC	-	clock rate
@@ -160,7 +165,7 @@ MAX_MAPS is the max number of pages (or banks whatever you have) that you
 can have. Set it to the largest you might need and load those present if
 your system comes in different memory sizes.
 
-If you are using swap then
+If you are using swap then:
 
 SWAPBASE	-	lowest address that will be swapped
 SWAPTOP		-	highest address that will be swapped
@@ -464,7 +469,7 @@ z80pack up with your platform configuration. See the dragon-nx32 for an
 additional optimisation.
 
 You may have to decide between limited process size or being prepared to do
-copying tricks to copy big chunks of memory around. 
+copying tricks to copy big chunks of memory around.
 
 If you have only a single user bank however it's easy - see z80pack-lite 8)
 

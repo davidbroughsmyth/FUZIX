@@ -30,8 +30,8 @@
 ;;; location of the image on the SDcard is hard-wired by equates
 ;;; klba2..klba0 below.
 
-klba2	equ $3                  ; LBA=0x0003.0000
-klba1	equ $0
+klba2	equ $3                  ; LBA=0x0003.0400
+klba1	equ $4
 klba0	equ $0
 
 ;;; --------- multicomp i/o registers
@@ -248,6 +248,7 @@ stack	equ	.
 ;;; For MBR and partition table formats, see:
 ;;; http://wiki.osdev.org/MBR_%28x86%29
 ;;; http://wiki.osdev.org/Partition_Table
+;;; The mbr start sectors are RELATIVE TO THE START OF THIS MBR
 
         ;; offset $1b4
 mbr_uid
@@ -261,8 +262,9 @@ mbr_1
 	fcb	$01     	; system ID (not 0, not 0x5, 0xf or 0x85)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
-	;; 65535-block root disk at 0x0003.1000
-	fcb	$00,$10,$03,$00	; partition's starting sector
+	;; 65535-block root disk at 0x0003.1000 but this mbr
+        ;; is at 0x0003.0000 so encode 0x0000.1000
+	fcb	$00,$10,$00,$00	; partition's starting sector
 	fcb	$fe,$ff,$00,$00	; partition's sector count
 
         ;; offset $1ce
@@ -272,8 +274,9 @@ mbr_2
 	fcb	$01     	; system ID (any non-zero value OK for FUZIX)
 	fcb	$ff,$ff,$ff	; end: "max out" as before
 	;; 32-bit values are stored little-endian: LS byte first.
-	;; 65535-block additional disk at 0x0004.1000
-	fcb	$00,$10,$04,$00	; partition's starting sector
+	;; 65535-block additional disk at 0x0004.1000 but this mbr
+        ;; is at 0x0003.0000 so encode 0x0001.1000
+	fcb	$00,$10,$01,$00	; partition's starting sector
 	fcb	$fe,$ff,$00,$00	; partition's sector count
 
 
