@@ -1,0 +1,32 @@
+cd /usr
+mkdir src
+chmod 755 src
+cd src
+mkdir fforth
+chmod 755 fforth
+
+cd /usr/bin
+bget ../../Applications/as09/as09
+bget ../../Applications/ld09/ld09
+bget ../../Applications/cave/advent
+bget ../../Applications/cave/advent.db
+bget ../../Applications/cpp/cpp
+bget ../../Applications/V7/games/arithmetic
+bget ../../Applications/V7/games/wump
+bget ../../Applications/V7/games/fish
+bget ../../Applications/V7/games/backgammon
+bget ../../Applications/util/fforth
+chmod 0755 as09
+chmod 0755 ld09
+chmod 0755 advent
+chmod 0755 advent.db
+chmod 0755 cpp
+chmod 0755 arithmetic
+chmod 0755 wump
+chmod 0755 fish
+chmod 0755 backgammon
+chmod 0755 fforth
+
+cd /usr/src/fforth
+bget ../../Applications/util/fforth_tests.fth
+chmod 0755 fforth_tests.fth
