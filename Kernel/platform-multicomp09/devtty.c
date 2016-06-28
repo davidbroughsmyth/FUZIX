@@ -11,7 +11,6 @@
 #include <graphics.h>
 
 #undef  DEBUG			/* UNdefine to delete debug code sequences */
-#undef  MC09_VIRTUAL_IN
 
 
 /* Multicomp has 3 serial ports. Each is a cut-down 6850, with fixed BAUD rate and word size.
@@ -29,18 +28,11 @@ static uint8_t *uart[] = {
     (volatile uint8_t *)0xFFD5, (volatile uint8_t *)0xFFD4,    /*         UART Data, Status port2, tty3 */
 };
 
-#ifdef MC09_VIRTUAL_IN
-/* Feed characters in to the console - for use in emulation because
-   my emulator currently does not support non-blocking input and it's
-   more fun making progress here than fixing the emulator.
-*/
-static int icount = 0;
-static int imatch = 100;
-/* X represents a pause at end-of-line*/
-/* Without pauses, the input streams ahead of the output */
-static uint8_t input[] = "ls -al\nXpwd\nXps\nX\x04root\nXtime ls\nX\nfforth /usr/src/fforth/fforth_tests.fth\nX";
-static int ccount = 0;
-#endif
+
+/* static int icount = 0; */
+/* static int imatch = 100; */
+/* static uint8_t input[] = "ls -al\nXpwd\nXps\nXwho\nX"; */
+/* static int ccount = 0; */
 
 
 #define VSECT __attribute__((section(".video")))
@@ -96,6 +88,7 @@ int my_tty_close(uint8_t minor)
 
 
 /* Output for the system console (kprintf etc) */
+/* [NAC HACK 2016May12] should this use minor number of BOOT_TTY or TTYDEV instead of being hard-wired to 1?? */
 void kputchar(char c)
 {
 	if (c == '\n')
@@ -158,27 +151,26 @@ void platform_interrupt(void)
 	   .. assuming I eventually get around to enabling serial Rx interrupts
 	   this will just get perkier with no additional coding required
 	   [NAC HACK 2016May05]  enable serial interrupts!!
-	*/
 
-#ifdef MC09_VIRTUAL_IN
-	icount++;
-	if (icount == imatch) {
-		imatch += 200;
-		if (input[ccount] != 0) {
-			while (input[ccount] != 'X') {
-				tty_inproc(minor(TTYDEV), input[ccount++]);
-			}
-			ccount++;
-		}
-	}
-#else
-	c = *(uart[1*2 + 1]);
-	if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
+	   **Really** need to get non-blocking input working on the emulator..
+	*/
+        c = *(uart[1*2 + 1]);
+          if (c & 0x01) { tty_inproc(1, *(uart[1*2])); }
 	/*	c = *(uart[2*2 + 1]);
 	if (c & 0x01) { tty_inproc(2, *(uart[2*2])); }
 	c = *(uart[3*2 + 1]);
 	if (c & 0x01) { tty_inproc(3, *(uart[3*2])); } */
-#endif
+
+        /* icount++; */
+        /* if (icount == imatch) { */
+	/* 	imatch += 200; */
+	/* 	if (input[ccount] != 0) { */
+	/* 		while (input[ccount] != 'X') { */
+	/* 			tty_inproc(minor(TTYDEV), input[ccount++]); */
+	/* 		} */
+	/* 		ccount++; */
+	/* 	} */
+        /* } */
 
 	/* [NAC HACK 2016May07] need defines for the timer */
 	c = *((volatile uint8_t *)0xFFDD);
@@ -188,7 +180,7 @@ void platform_interrupt(void)
 		timer_interrupt();
 	}
 
-        //	dw_vpoll();
+	dw_vpoll();
 }
 
 

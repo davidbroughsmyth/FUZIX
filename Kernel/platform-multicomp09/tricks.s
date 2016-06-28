@@ -2,6 +2,26 @@
 ;;; CoCo3 ghoulish tricks (boo!) ported to multicomp09
 ;;;
 
+
+;;; [NAC HACK 2016May01] want all the hw reg definitions in a common place.
+
+;;; multicomp09 HW registers
+MMUADR	equ	$ffde
+MMUDAT	equ	$ffdf
+
+;;; bit-fields
+MMUADR_ROMDIS	equ $80		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_TR	equ $40		; 0 after reset, 0 when FUZIX boots. 0=map0, 1=map1
+MMUADR_MMUEN	equ $20		; 0 after reset, 1 when FUZIX boots. Leave at 1.
+MMUADR_NMI	equ $10		; 0 after reset, 0 when FUZIX boots. Do not write 1.
+MMUADR_MAPSEL	equ $0f		; last-written value is UNDEFINED.
+;;; the only two useful values for the upper nibble
+MMU_MAP0	equ	(MMUADR_ROMDIS|MMUADR_MMUEN)
+MMU_MAP1	equ	(MMUADR_ROMDIS|MMUADR_MMUEN|MMUADR_TR)
+
+
+
+
         .module tricks
 
 	;; imported
@@ -21,7 +41,7 @@
 
         include "kernel.def"
         include "../kernel09.def"
-        include "platform.def"
+
 
 	.area .data
 ;;; _ramtop cannot be in common, as this memory becomes per-process
@@ -250,7 +270,7 @@ skip2@	incb
 ;;; uses low 32Kbyte of kernel address space as the "window" for this
 ;;; use map 8,9 (0x0000-0x3fff) for dest, map 10,11 (0x4000-0x7fff) for source
 copybank
-	pshs	d,x,u,y		; changing this will affect "ldb 0,s" below
+	pshs	d,x,u,y		; changing this will affect "ldb 1,s" below
 	;; map in dest
 	ldx	#MMUADR		; for storing
 	lda	#(MMU_MAP1+8)	; mapsel=8, for dest, in B
